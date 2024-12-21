@@ -1,2 +1,3 @@
 packages:
   - 'pgpvis-core'
+  - 'pgpvis-ui'
