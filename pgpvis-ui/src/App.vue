@@ -1,37 +1,34 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 
-import { type Message, parse_armored } from "pgpvis-core";
+import { parse, TypeID, type PacketSequence } from "pgpvis-core";
 
 const message = ref("");
-const packets = ref<Message>();
+const packets = ref<PacketSequence>([]);
 
 const user_ids = computed(() => {
-  if (packets.value === undefined) {
-    return [];
-  }
-
   const user_ids = [];
   for (let packet of packets.value) {
-    if (packet === "Unknown") {
+    if (packet.inner === undefined) {
       continue;
     }
-    if ("UserId" in packet) {
-      user_ids.push(packet.UserId);
+    if (packet.inner.header.inner.ctb.inner.type_id === TypeID.UserID) {
+      user_ids.push(packet.inner.body.inner!.user_id);
     }
   }
   return user_ids;
 });
 
-function parse() {
-  packets.value = parse_armored(message.value);
+function do_parse() {
+  const encoded = new TextEncoder().encode(message.value);
+  packets.value = parse(encoded);
 }
 </script>
 
 <template>
   <textarea v-model="message"></textarea>
-  <button @click="parse">Parse</button>
-  <li v-for="(user_id, index) in user_ids" :key="index">{{ user_id.id }}</li>
+  <button @click="do_parse">Parse</button>
+  <li v-for="(user_id, index) in user_ids" :key="index">{{ user_id.inner }}</li>
 </template>
 
 <style scoped></style>
