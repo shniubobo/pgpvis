@@ -17,19 +17,34 @@ pub trait PacketType {
     const TYPE_ID: TypeId;
 }
 
-/// Every possible Type ID as defined by [RFC 9580].
-///
-/// [RFC 9580]: https://datatracker.ietf.org/doc/html/rfc9580#name-packet-types
-// `#[derive(Tsify)]` doesn't support serializing as `u8`.
-#[wasm_bindgen]
-// `Serialize_repr` is derived despite the use of `#[wasm_bindgen]`, so that
-// `Serialize` can be derived on other structs that contain `TypeID`.
-#[derive(Debug, PartialEq, Eq, Serialize_repr)]
-#[repr(u8)]
-#[non_exhaustive]
-pub enum TypeId {
-    UserId = 13,
-    Private60 = 60,
+macro_rules! gen_packet_type_impls {
+    ( $packet_type:ident ) => {
+        impl PacketType for $packet_type {
+            const TYPE_ID: TypeId = TypeId::$packet_type;
+        }
+    };
+
+    [ $( $packet_type:ident ),+ $(,)? ] => {
+        $( gen_packet_type_impls!($packet_type); )+
+    };
+}
+
+macro_rules! gen_type_id_enum {
+    { $( $packet_type:ident = $type_id:literal ),+ $(,)? } => {
+        /// Every possible Type ID as defined by [RFC 9580].
+        ///
+        /// [RFC 9580]: https://datatracker.ietf.org/doc/html/rfc9580#name-packet-types
+        // `#[derive(Tsify)]` doesn't support serializing as `u8`.
+        #[wasm_bindgen]
+        // `Serialize_repr` is derived despite the use of `#[wasm_bindgen]`, so
+        // that `Serialize` can be derived on other structs that contain `TypeID`.
+        #[derive(Debug, PartialEq, Eq, Serialize_repr)]
+        #[repr(u8)]
+        #[non_exhaustive]
+        pub enum TypeId {
+            $( $packet_type = $type_id ),+
+        }
+    };
 }
 
 /// Newtype for [`Vec<Span<AnyPacket>>`].
@@ -56,18 +71,21 @@ impl<T> Span<T> {
     }
 }
 
-/// Enum of every type of packet.
-///
-/// This is necessary if we need to fit packets into a single data structure,
-/// such as a [`Vec`].
-#[derive(Debug, PartialEq, Eq, Serialize, Tsify)]
-#[serde(untagged)]
-#[non_exhaustive]
-pub enum AnyPacket {
-    UserId(Packet<UserID>),
-    Private60(Packet<Private60>),
-    // TODO: Remove this after we add placeholders for each packet type.
-    Unknown,
+macro_rules! gen_any_packet_enum {
+    [ $( $packet_type:ident ),+ $(,)? ] => {
+        /// Enum of every type of packet.
+        ///
+        /// This is necessary if we need to fit packets into a single data
+        /// structure, such as a [`Vec`].
+        #[derive(Debug, PartialEq, Eq, Serialize, Tsify)]
+        #[serde(untagged)]
+        #[non_exhaustive]
+        pub enum AnyPacket {
+            $( $packet_type(Packet<$packet_type>), )+
+            // TODO: Remove this after we add placeholders for each packet type.
+            Unknown,
+        }
+    };
 }
 
 /// An OpenPGP packet, including the header and the body.
@@ -205,15 +223,11 @@ where
 }
 
 #[derive(Debug, PartialEq, Eq, Serialize, Tsify)]
-pub struct UserID {
+pub struct UserId {
     pub user_id: Span<String>,
 }
 
-impl PacketType for UserID {
-    const TYPE_ID: TypeId = TypeId::UserId;
-}
-
-impl From<Span<&pgp::packet::UserID>> for UserID {
+impl From<Span<&pgp::packet::UserID>> for UserId {
     fn from(value: Span<&pgp::packet::UserID>) -> Self {
         Self {
             user_id: Span {
@@ -228,8 +242,21 @@ impl From<Span<&pgp::packet::UserID>> for UserID {
 #[derive(Debug, PartialEq, Eq, Serialize, Tsify)]
 pub struct Private60;
 
-impl PacketType for Private60 {
-    const TYPE_ID: TypeId = TypeId::Private60;
+macro_rules! gen_packet_enums_and_impls {
+    { $( $packet_type:ident = $type_id:literal ),+ $(,)? } => {
+        gen_packet_type_impls![$( $packet_type ),+];
+
+        gen_type_id_enum! {
+            $( $packet_type = $type_id ),+
+        }
+
+        gen_any_packet_enum![$( $packet_type ),+];
+    };
+}
+
+gen_packet_enums_and_impls! {
+    UserId = 13,
+    Private60 = 60,
 }
 
 #[cfg(test)]
@@ -240,7 +267,7 @@ mod tests {
 
     #[wasm_bindgen_test]
     fn header_type_id_inferred_from_body() {
-        let user_id = UserID {
+        let user_id = UserId {
             user_id: Span {
                 offset: 2,
                 length: 1,

@@ -84,7 +84,7 @@ mod tests {
                 body: Span {
                     offset: 2,
                     length: 23,
-                    inner: Body(UserID {
+                    inner: Body(UserId {
                         user_id: Span {
                             offset: 2,
                             length: 23,
@@ -127,7 +127,7 @@ mod tests {
                 body: Span {
                     offset: 2,
                     length: 23,
-                    inner: Body(UserID {
+                    inner: Body(UserId {
                         user_id: Span {
                             offset: 2,
                             length: 23,

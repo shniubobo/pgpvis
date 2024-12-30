@@ -113,9 +113,9 @@ impl IntermediatePacket<'_, '_> {
         Ok(Span::new(offset, length, packet_length))
     }
 
-    fn convert_user_id(&mut self, user_id: &pgp::packet::UserID) -> Result<Span<Body<UserID>>> {
+    fn convert_user_id(&mut self, user_id: &pgp::packet::UserID) -> Result<Span<Body<UserId>>> {
         let (offset, length) = self.advance_offset(Self::BODY_IDX)?;
-        let user_id: UserID = Span::new(offset, length, user_id).into();
+        let user_id: UserId = Span::new(offset, length, user_id).into();
         let body = user_id.into();
 
         Ok(Span::new(offset, length, body))
