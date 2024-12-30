@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 
-import { parse, TypeID, type PacketSequence } from "pgpvis-core";
+import { parse, TypeId, type PacketSequence } from "pgpvis-core";
 
 const message = ref("");
 const packets = ref<PacketSequence>([]);
@@ -12,7 +12,7 @@ const user_ids = computed(() => {
     if (packet.inner === undefined) {
       continue;
     }
-    if (packet.inner.header.inner.ctb.inner.type_id === TypeID.UserID) {
+    if (packet.inner.header.inner.ctb.inner.type_id === TypeId.UserId) {
       user_ids.push(packet.inner.body.inner!.user_id);
     }
   }
