@@ -9,6 +9,8 @@ use serde_repr::Serialize_repr;
 use tsify_next::Tsify;
 use wasm_bindgen::prelude::*;
 
+use crate::error::*;
+
 /// Trait implemented by every struct that represents a certain type of packet.
 ///
 /// This is necessary for a Type ID to be inferred during compile-time for each
@@ -103,31 +105,84 @@ where
 
 /// The first few bytes of a packet which specifies its format and length.
 #[derive(Debug, PartialEq, Eq, Serialize, Tsify)]
-#[serde(untagged)]
+#[serde(tag = "format")]
 pub enum Header<T>
 where
     T: PacketType,
 {
+    #[serde(rename = "OpenPGP")]
     OpenPgp {
-        ctb: Span<Ctb<T>>,
+        ctb: Span<OpenPgpCtb<T>>,
         length: Span<OpenPGPLength>,
     },
     Legacy {
-        ctb: Span<Ctb<T>>,
+        ctb: Span<LegacyCtb<T>>,
         length: Span<LegacyLength>,
     },
 }
 
-/// The first byte of each header.
+/// OpenPGP format newtype variant of [`Ctb`].
 #[derive(Debug, PartialEq, Eq, Serialize, Tsify)]
+pub struct OpenPgpCtb<T>(pub Ctb<T>)
+where
+    T: PacketType;
+
+impl<T> OpenPgpCtb<T>
+where
+    T: PacketType,
+{
+    pub fn from_openpgp(ctb: &pgp::packet::header::CTB) -> Result<Self> {
+        match ctb {
+            pgp::packet::header::CTB::New(_) => Ok(Self(Ctb::new())),
+            pgp::packet::header::CTB::Old(_) => Err(Error::WrongFormat {
+                expected: "OpenPGP".to_string(),
+                got: "Legacy".to_string(),
+            }),
+        }
+    }
+
+    #[expect(dead_code)]
+    fn from_legacy(_ctb: &pgp::packet::header::CTB) -> Result<Self> {
+        unimplemented!()
+    }
+}
+
+/// Legacy format newtype variant of [`Ctb`].
+#[derive(Debug, PartialEq, Eq, Serialize, Tsify)]
+pub struct LegacyCtb<T>(pub Ctb<T>)
+where
+    T: PacketType;
+
+impl<T> LegacyCtb<T>
+where
+    T: PacketType,
+{
+    #[expect(dead_code)]
+    fn from_openpgp(_ctb: &pgp::packet::header::CTB) -> Result<Self> {
+        unimplemented!()
+    }
+
+    pub fn from_legacy(ctb: &pgp::packet::header::CTB) -> Result<Self> {
+        match ctb {
+            pgp::packet::header::CTB::New(_) => Err(Error::WrongFormat {
+                expected: "Legacy".to_string(),
+                got: "OpenPGP".to_string(),
+            }),
+            pgp::packet::header::CTB::Old(_) => Ok(Self(Ctb::new())),
+        }
+    }
+}
+
+/// The first byte of each header.
+#[derive(Debug, Default, PartialEq, Eq, Serialize, Tsify)]
 pub struct Ctb<T>
 where
     T: PacketType,
 {
-    pub format: Format,
     #[serde(serialize_with = "Ctb::<T>::serialize_type_id")]
     #[tsify(type = "TypeID")]
     type_id: (),
+    #[serde(skip)]
     packet_type: PhantomData<T>,
 }
 
@@ -137,9 +192,8 @@ where
 {
     const TYPE_ID: TypeId = T::TYPE_ID;
 
-    pub fn new(format: Format) -> Self {
+    pub fn new() -> Self {
         Self {
-            format,
             type_id: (),
             packet_type: PhantomData,
         }
@@ -154,24 +208,6 @@ where
         S: Serializer,
     {
         Self::TYPE_ID.serialize(serializer)
-    }
-}
-
-#[derive(Debug, PartialEq, Eq, Serialize, Tsify)]
-pub enum Format {
-    // This should be `OpenPgp` by convention of Rust, but we are using
-    // `OpenPGP` here, so that we don't need to write a custom serializing
-    // function, or tamper with `Tsify` to create the right string in `.d.ts`.
-    OpenPGP,
-    Legacy,
-}
-
-impl From<&pgp::packet::header::CTB> for Format {
-    fn from(value: &pgp::packet::header::CTB) -> Self {
-        match *value {
-            pgp::packet::header::CTB::New(_) => Self::OpenPGP,
-            pgp::packet::header::CTB::Old(_) => Self::Legacy,
-        }
     }
 }
 
@@ -282,11 +318,10 @@ mod tests {
                     ctb: Span {
                         offset: 0,
                         length: 1,
-                        inner: Ctb {
-                            format: Format::Legacy,
+                        inner: LegacyCtb(Ctb {
                             type_id: (),
                             packet_type: PhantomData,
-                        },
+                        }),
                     },
                     length: Span {
                         offset: 1,
@@ -304,7 +339,7 @@ mod tests {
 
         match packet.header.inner {
             Header::OpenPgp { .. } => unreachable!(),
-            Header::Legacy { ctb, .. } => assert_eq!(ctb.inner.type_id(), TypeId::UserId),
+            Header::Legacy { ctb, .. } => assert_eq!(ctb.inner.0.type_id(), TypeId::UserId),
         }
     }
 }

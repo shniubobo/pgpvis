@@ -23,6 +23,15 @@ pub enum Error {
     #[error("unimplemented packet; type id: {type_id}")]
     UnknownPacket { type_id: u8 },
 
+    // The plan is that we allow conversion between the two formats in the
+    // future, and this `Error` is returned in case a `CTB` of the wrong format
+    // has been passed in. This won't be useful if we decide not to implement
+    // the conversion, in which case we can return an `Option`, just panic,
+    // or preferably redesign the types so that it's impossible for a wrong
+    // type to be passed in.
+    #[error("expected CTB format {expected}, got {got}")]
+    WrongFormat { expected: String, got: String },
+
     // This should not occur as long as we define packet fields correctly,
     // but just in case we do it wrong, we can return this instead of
     // panicking.

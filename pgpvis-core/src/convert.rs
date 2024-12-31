@@ -70,14 +70,13 @@ impl IntermediatePacket<'_, '_> {
     {
         let offset = self.context.offset();
         let header = {
-            let ctb = self.convert_ctb()?;
             match self.header.ctb() {
                 pgp::packet::header::CTB::New(_) => Header::OpenPgp {
-                    ctb,
+                    ctb: self.convert_openpgp_ctb()?,
                     length: self.convert_openpgp_length()?,
                 },
                 pgp::packet::header::CTB::Old(_) => Header::Legacy {
-                    ctb,
+                    ctb: self.convert_legacy_ctb()?,
                     length: self.convert_legacy_length()?,
                 },
             }
@@ -89,12 +88,24 @@ impl IntermediatePacket<'_, '_> {
 
     // TODO: Generate the following methods with macros.
 
-    fn convert_ctb<T>(&mut self) -> Result<Span<Ctb<T>>>
+    fn convert_openpgp_ctb<T>(&mut self) -> Result<Span<OpenPgpCtb<T>>>
     where
         T: PacketType,
     {
         let (offset, length) = self.advance_offset(Self::CTB_IDX)?;
-        let ctb = Ctb::new(self.header.ctb().into());
+        let ctb = self.header.ctb();
+        let ctb = OpenPgpCtb::from_openpgp(ctb)?;
+
+        Ok(Span::new(offset, length, ctb))
+    }
+
+    fn convert_legacy_ctb<T>(&mut self) -> Result<Span<LegacyCtb<T>>>
+    where
+        T: PacketType,
+    {
+        let (offset, length) = self.advance_offset(Self::CTB_IDX)?;
+        let ctb = self.header.ctb();
+        let ctb = LegacyCtb::from_legacy(ctb)?;
 
         Ok(Span::new(offset, length, ctb))
     }

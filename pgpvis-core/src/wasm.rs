@@ -72,7 +72,7 @@ mod tests {
                         ctb: Span {
                             offset: 0,
                             length: 1,
-                            inner: Ctb::new(Format::OpenPGP),
+                            inner: OpenPgpCtb(Ctb::new()),
                         },
                         length: Span {
                             offset: 1,
@@ -115,7 +115,7 @@ mod tests {
                         ctb: Span {
                             offset: 0,
                             length: 1,
-                            inner: Ctb::new(Format::Legacy),
+                            inner: LegacyCtb(Ctb::new()),
                         },
                         length: Span {
                             offset: 1,
