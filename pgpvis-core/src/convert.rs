@@ -72,12 +72,12 @@ impl IntermediatePacket<'_, '_> {
         let header = {
             match self.header.ctb() {
                 pgp::packet::header::CTB::New(_) => Header::OpenPgp {
-                    ctb: self.convert_openpgp_ctb()?,
-                    length: self.convert_openpgp_length()?,
+                    ctb: self.convert_ctb()?,
+                    length: self.convert_length()?,
                 },
                 pgp::packet::header::CTB::Old(_) => Header::Legacy {
-                    ctb: self.convert_legacy_ctb()?,
-                    length: self.convert_legacy_length()?,
+                    ctb: self.convert_ctb()?,
+                    length: self.convert_length()?,
                 },
             }
         };
@@ -88,38 +88,23 @@ impl IntermediatePacket<'_, '_> {
 
     // TODO: Generate the following methods with macros.
 
-    fn convert_openpgp_ctb<T>(&mut self) -> Result<Span<OpenPgpCtb<T>>>
+    fn convert_ctb<C, P>(&mut self) -> Result<Span<C>>
     where
-        T: PacketType,
+        C: for<'a> From<&'a pgp::packet::header::CTB> + Into<Ctb<P>>,
+        P: PacketType,
     {
         let (offset, length) = self.advance_offset(Self::CTB_IDX)?;
-        let ctb = self.header.ctb();
-        let ctb = OpenPgpCtb::from_openpgp(ctb)?;
+        let ctb = self.header.ctb().into();
 
         Ok(Span::new(offset, length, ctb))
     }
 
-    fn convert_legacy_ctb<T>(&mut self) -> Result<Span<LegacyCtb<T>>>
+    fn convert_length<L>(&mut self) -> Result<Span<L>>
     where
-        T: PacketType,
+        L: for<'a> TryFrom<&'a pgp::packet::Header, Error = Error> + Length,
     {
-        let (offset, length) = self.advance_offset(Self::CTB_IDX)?;
-        let ctb = self.header.ctb();
-        let ctb = LegacyCtb::from_legacy(ctb)?;
-
-        Ok(Span::new(offset, length, ctb))
-    }
-
-    fn convert_openpgp_length(&mut self) -> Result<Span<OpenPGPLength>> {
         let (offset, length) = self.advance_offset(Self::LENGTH_IDX)?;
-        let packet_length = self.header.length().into();
-
-        Ok(Span::new(offset, length, packet_length))
-    }
-
-    fn convert_legacy_length(&mut self) -> Result<Span<LegacyLength>> {
-        let (offset, length) = self.advance_offset(Self::LENGTH_IDX)?;
-        let packet_length = self.header.length().into();
+        let packet_length = self.header.try_into()?;
 
         Ok(Span::new(offset, length, packet_length))
     }

@@ -113,7 +113,7 @@ where
     #[serde(rename = "OpenPGP")]
     OpenPgp {
         ctb: Span<OpenPgpCtb<T>>,
-        length: Span<OpenPGPLength>,
+        length: Span<OpenPgpLength>,
     },
     Legacy {
         ctb: Span<LegacyCtb<T>>,
@@ -141,9 +141,28 @@ where
         }
     }
 
-    #[expect(dead_code)]
     fn from_legacy(_ctb: &pgp::packet::header::CTB) -> Result<Self> {
-        unimplemented!()
+        Err(Error::Unimplemented)
+    }
+}
+
+impl<T> From<&pgp::packet::header::CTB> for OpenPgpCtb<T>
+where
+    T: PacketType,
+{
+    fn from(ctb: &pgp::packet::header::CTB) -> Self {
+        Self::from_openpgp(ctb)
+            .or_else(|_| Self::from_legacy(ctb))
+            .unwrap()
+    }
+}
+
+impl<T> From<OpenPgpCtb<T>> for Ctb<T>
+where
+    T: PacketType,
+{
+    fn from(value: OpenPgpCtb<T>) -> Self {
+        value.0
     }
 }
 
@@ -157,9 +176,8 @@ impl<T> LegacyCtb<T>
 where
     T: PacketType,
 {
-    #[expect(dead_code)]
     fn from_openpgp(_ctb: &pgp::packet::header::CTB) -> Result<Self> {
-        unimplemented!()
+        Err(Error::Unimplemented)
     }
 
     pub fn from_legacy(ctb: &pgp::packet::header::CTB) -> Result<Self> {
@@ -170,6 +188,26 @@ where
             }),
             pgp::packet::header::CTB::Old(_) => Ok(Self(Ctb::new())),
         }
+    }
+}
+
+impl<T> From<&pgp::packet::header::CTB> for LegacyCtb<T>
+where
+    T: PacketType,
+{
+    fn from(ctb: &pgp::packet::header::CTB) -> Self {
+        Self::from_openpgp(ctb)
+            .or_else(|_| Self::from_legacy(ctb))
+            .unwrap()
+    }
+}
+
+impl<T> From<LegacyCtb<T>> for Ctb<T>
+where
+    T: PacketType,
+{
+    fn from(value: LegacyCtb<T>) -> Self {
+        value.0
     }
 }
 
@@ -211,20 +249,35 @@ where
     }
 }
 
+/// Marker trait for [`OpenPgpLength`] and [`LegacyLength`].
+pub(crate) trait Length {}
+impl Length for OpenPgpLength {}
+impl Length for LegacyLength {}
+
 #[derive(Debug, PartialEq, Eq, Serialize, Tsify)]
 #[serde(tag = "encoding", content = "length")]
-pub enum OpenPGPLength {
+pub enum OpenPgpLength {
     Full(u32),
     Partial(u32),
 }
 
-impl From<&PgpBodyLength> for OpenPGPLength {
-    fn from(value: &PgpBodyLength) -> Self {
-        match *value {
-            PgpBodyLength::Full(length) => OpenPGPLength::Full(length),
-            PgpBodyLength::Partial(length) => OpenPGPLength::Partial(length),
+impl TryFrom<&pgp::packet::Header> for OpenPgpLength {
+    type Error = Error;
+
+    fn try_from(header: &pgp::packet::Header) -> StdResult<Self, Self::Error> {
+        if let pgp::packet::header::CTB::Old(_) = header.ctb() {
+            return Err(Error::WrongFormat {
+                expected: "OpenPGP".to_string(),
+                got: "Legacy".to_string(),
+            });
+        };
+
+        let length = match *header.length() {
+            PgpBodyLength::Full(length) => Self::Full(length),
+            PgpBodyLength::Partial(length) => Self::Partial(length),
             PgpBodyLength::Indeterminate => unreachable!(),
-        }
+        };
+        Ok(length)
     }
 }
 
@@ -235,13 +288,23 @@ pub enum LegacyLength {
     Indeterminate,
 }
 
-impl From<&PgpBodyLength> for LegacyLength {
-    fn from(value: &PgpBodyLength) -> Self {
-        match *value {
-            PgpBodyLength::Full(length) => LegacyLength::Full(length),
+impl TryFrom<&pgp::packet::Header> for LegacyLength {
+    type Error = Error;
+
+    fn try_from(header: &pgp::packet::Header) -> StdResult<Self, Self::Error> {
+        if let pgp::packet::header::CTB::New(_) = header.ctb() {
+            return Err(Error::WrongFormat {
+                expected: "Legacy".to_string(),
+                got: "OpenPGP".to_string(),
+            });
+        };
+
+        let length = match *header.length() {
+            PgpBodyLength::Full(length) => Self::Full(length),
             PgpBodyLength::Partial(_) => unreachable!(),
-            PgpBodyLength::Indeterminate => LegacyLength::Indeterminate,
-        }
+            PgpBodyLength::Indeterminate => Self::Indeterminate,
+        };
+        Ok(length)
     }
 }
 

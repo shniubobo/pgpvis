@@ -77,7 +77,7 @@ mod tests {
                         length: Span {
                             offset: 1,
                             length: 1,
-                            inner: OpenPGPLength::Full(23),
+                            inner: OpenPgpLength::Full(23),
                         },
                     },
                 },
