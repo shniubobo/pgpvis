@@ -49,6 +49,40 @@ macro_rules! gen_type_id_enum {
     };
 }
 
+macro_rules! gen_any_packet_enum {
+    [ $( $packet_type:ident ),+ $(,)? ] => {
+        /// Enum of every type of packet.
+        ///
+        /// This is necessary if we need to fit packets into a single data
+        /// structure, such as a [`Vec`].
+        #[derive(Debug, PartialEq, Eq, Serialize, Tsify)]
+        #[serde(untagged)]
+        #[non_exhaustive]
+        pub enum AnyPacket {
+            $( $packet_type(Packet<$packet_type>), )+
+            // TODO: Remove this after we add placeholders for each packet type.
+            Unknown,
+        }
+    };
+}
+
+macro_rules! gen_packet_enums_and_impls {
+    { $( $packet_type:ident = $type_id:literal ),+ $(,)? } => {
+        gen_packet_type_impls![$( $packet_type ),+];
+
+        gen_type_id_enum! {
+            $( $packet_type = $type_id ),+
+        }
+
+        gen_any_packet_enum![$( $packet_type ),+];
+    };
+}
+
+gen_packet_enums_and_impls! {
+    UserId = 13,
+    Private60 = 60,
+}
+
 /// Newtype for [`Vec<Span<AnyPacket>>`].
 #[derive(Debug, PartialEq, Eq, Serialize, Tsify)]
 #[tsify(into_wasm_abi)]
@@ -71,23 +105,6 @@ impl<T> Span<T> {
             inner,
         }
     }
-}
-
-macro_rules! gen_any_packet_enum {
-    [ $( $packet_type:ident ),+ $(,)? ] => {
-        /// Enum of every type of packet.
-        ///
-        /// This is necessary if we need to fit packets into a single data
-        /// structure, such as a [`Vec`].
-        #[derive(Debug, PartialEq, Eq, Serialize, Tsify)]
-        #[serde(untagged)]
-        #[non_exhaustive]
-        pub enum AnyPacket {
-            $( $packet_type(Packet<$packet_type>), )+
-            // TODO: Remove this after we add placeholders for each packet type.
-            Unknown,
-        }
-    };
 }
 
 /// An OpenPGP packet, including the header and the body.
@@ -218,7 +235,7 @@ where
     T: PacketType,
 {
     #[serde(serialize_with = "Ctb::<T>::serialize_type_id")]
-    #[tsify(type = "TypeID")]
+    #[tsify(type = "TypeId")]
     type_id: (),
     #[serde(skip)]
     packet_type: PhantomData<T>,
@@ -340,23 +357,6 @@ impl From<Span<&pgp::packet::UserID>> for UserId {
 
 #[derive(Debug, PartialEq, Eq, Serialize, Tsify)]
 pub struct Private60;
-
-macro_rules! gen_packet_enums_and_impls {
-    { $( $packet_type:ident = $type_id:literal ),+ $(,)? } => {
-        gen_packet_type_impls![$( $packet_type ),+];
-
-        gen_type_id_enum! {
-            $( $packet_type = $type_id ),+
-        }
-
-        gen_any_packet_enum![$( $packet_type ),+];
-    };
-}
-
-gen_packet_enums_and_impls! {
-    UserId = 13,
-    Private60 = 60,
-}
 
 #[cfg(test)]
 mod tests {

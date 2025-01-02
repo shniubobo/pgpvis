@@ -35,13 +35,19 @@ fn parse(message: &[u8]) -> Result<PacketSequence> {
 
     while let PacketParserResult::Some(parser) = parser_result {
         let packet = IntermediatePacket::new(&mut context, &parser);
-        // TODO: Replace the `unwrap_or` call with `?` after we remove
-        // `AnyPacket::Unknown`.
-        packet_sequence.0.push(packet.try_into().unwrap_or(Span {
-            offset: 0,
-            length: 0,
-            inner: AnyPacket::Unknown,
-        }));
+        // TODO: Replace the `or_else` call with `?` after we remove
+        // `AnyPacket::Unknown` and `Error::UnknownPacket`.
+        packet_sequence.0.push(packet.try_into().or_else(|err| {
+            if let Error::UnknownPacket { .. } = err {
+                Ok(Span {
+                    offset: 0,
+                    length: 0,
+                    inner: AnyPacket::Unknown,
+                })
+            } else {
+                Err(err)
+            }
+        })?);
 
         parser_result = parser.next()?.1
     }

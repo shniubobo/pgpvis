@@ -5,7 +5,7 @@ use std::result::Result as StdResult;
 
 use sequoia_openpgp::{
     self as pgp,
-    parse::{map::Field as PGPField, PacketParser},
+    parse::{map::Field as PgpField, PacketParser},
 };
 
 use crate::error::*;
@@ -14,7 +14,7 @@ use crate::packet::*;
 /// Intermediate struct to convert [`PacketParser`] into [`Span<AnyPacket>`].
 pub(crate) struct IntermediatePacket<'context, 'packet> {
     context: &'context mut Context,
-    spans: Vec<PGPField<'packet>>,
+    spans: Vec<PgpField<'packet>>,
     header: &'packet pgp::packet::Header,
     body: &'packet pgp::Packet,
 }
