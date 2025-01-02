@@ -3,13 +3,10 @@
 use std::marker::PhantomData;
 use std::result::Result as StdResult;
 
-use sequoia_openpgp::{self as pgp, packet::header::BodyLength as PgpBodyLength};
 use serde::{Serialize, Serializer};
 use serde_repr::Serialize_repr;
 use tsify_next::Tsify;
 use wasm_bindgen::prelude::*;
-
-use crate::error::*;
 
 /// Trait implemented by every struct that represents a certain type of packet.
 ///
@@ -144,36 +141,6 @@ pub struct OpenPgpCtb<T>(pub Ctb<T>)
 where
     T: PacketType;
 
-impl<T> OpenPgpCtb<T>
-where
-    T: PacketType,
-{
-    pub fn from_openpgp(ctb: &pgp::packet::header::CTB) -> Result<Self> {
-        match ctb {
-            pgp::packet::header::CTB::New(_) => Ok(Self(Ctb::new())),
-            pgp::packet::header::CTB::Old(_) => Err(Error::WrongFormat {
-                expected: "OpenPGP".to_string(),
-                got: "Legacy".to_string(),
-            }),
-        }
-    }
-
-    fn from_legacy(_ctb: &pgp::packet::header::CTB) -> Result<Self> {
-        Err(Error::Unimplemented)
-    }
-}
-
-impl<T> From<&pgp::packet::header::CTB> for OpenPgpCtb<T>
-where
-    T: PacketType,
-{
-    fn from(ctb: &pgp::packet::header::CTB) -> Self {
-        Self::from_openpgp(ctb)
-            .or_else(|_| Self::from_legacy(ctb))
-            .unwrap()
-    }
-}
-
 impl<T> From<OpenPgpCtb<T>> for Ctb<T>
 where
     T: PacketType,
@@ -188,36 +155,6 @@ where
 pub struct LegacyCtb<T>(pub Ctb<T>)
 where
     T: PacketType;
-
-impl<T> LegacyCtb<T>
-where
-    T: PacketType,
-{
-    fn from_openpgp(_ctb: &pgp::packet::header::CTB) -> Result<Self> {
-        Err(Error::Unimplemented)
-    }
-
-    pub fn from_legacy(ctb: &pgp::packet::header::CTB) -> Result<Self> {
-        match ctb {
-            pgp::packet::header::CTB::New(_) => Err(Error::WrongFormat {
-                expected: "Legacy".to_string(),
-                got: "OpenPGP".to_string(),
-            }),
-            pgp::packet::header::CTB::Old(_) => Ok(Self(Ctb::new())),
-        }
-    }
-}
-
-impl<T> From<&pgp::packet::header::CTB> for LegacyCtb<T>
-where
-    T: PacketType,
-{
-    fn from(ctb: &pgp::packet::header::CTB) -> Self {
-        Self::from_openpgp(ctb)
-            .or_else(|_| Self::from_legacy(ctb))
-            .unwrap()
-    }
-}
 
 impl<T> From<LegacyCtb<T>> for Ctb<T>
 where
@@ -278,51 +215,11 @@ pub enum OpenPgpLength {
     Partial(u32),
 }
 
-impl TryFrom<&pgp::packet::Header> for OpenPgpLength {
-    type Error = Error;
-
-    fn try_from(header: &pgp::packet::Header) -> StdResult<Self, Self::Error> {
-        if let pgp::packet::header::CTB::Old(_) = header.ctb() {
-            return Err(Error::WrongFormat {
-                expected: "OpenPGP".to_string(),
-                got: "Legacy".to_string(),
-            });
-        };
-
-        let length = match *header.length() {
-            PgpBodyLength::Full(length) => Self::Full(length),
-            PgpBodyLength::Partial(length) => Self::Partial(length),
-            PgpBodyLength::Indeterminate => unreachable!(),
-        };
-        Ok(length)
-    }
-}
-
 #[derive(Debug, PartialEq, Eq, Serialize, Tsify)]
 #[serde(tag = "encoding", content = "length")]
 pub enum LegacyLength {
     Full(u32),
     Indeterminate,
-}
-
-impl TryFrom<&pgp::packet::Header> for LegacyLength {
-    type Error = Error;
-
-    fn try_from(header: &pgp::packet::Header) -> StdResult<Self, Self::Error> {
-        if let pgp::packet::header::CTB::New(_) = header.ctb() {
-            return Err(Error::WrongFormat {
-                expected: "Legacy".to_string(),
-                got: "OpenPGP".to_string(),
-            });
-        };
-
-        let length = match *header.length() {
-            PgpBodyLength::Full(length) => Self::Full(length),
-            PgpBodyLength::Partial(_) => unreachable!(),
-            PgpBodyLength::Indeterminate => Self::Indeterminate,
-        };
-        Ok(length)
-    }
 }
 
 /// A packet, without its [`Header`].
@@ -341,18 +238,6 @@ where
 #[derive(Debug, PartialEq, Eq, Serialize, Tsify)]
 pub struct UserId {
     pub user_id: Span<String>,
-}
-
-impl From<Span<&pgp::packet::UserID>> for UserId {
-    fn from(value: Span<&pgp::packet::UserID>) -> Self {
-        Self {
-            user_id: Span {
-                offset: value.offset,
-                length: value.length,
-                inner: String::from_utf8_lossy(value.inner.value()).to_string(),
-            },
-        }
-    }
 }
 
 #[derive(Debug, PartialEq, Eq, Serialize, Tsify)]

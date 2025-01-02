@@ -3,24 +3,21 @@
 
 use std::result::Result as StdResult;
 
-use sequoia_openpgp::{
-    self as pgp,
-    parse::{map::Field as PgpField, PacketParser},
-};
+use sequoia_openpgp::{self as pgp, parse::PacketParser};
 
 use crate::error::*;
 use crate::packet::*;
 
 /// Intermediate struct to convert [`PacketParser`] into [`Span<AnyPacket>`].
-pub(crate) struct IntermediatePacket<'context, 'packet> {
+pub(crate) struct Converter<'context, 'packet> {
     context: &'context mut Context,
-    spans: Vec<PgpField<'packet>>,
+    spans: Vec<pgp::parse::map::Field<'packet>>,
     header: &'packet pgp::packet::Header,
     body: &'packet pgp::Packet,
 }
 
-impl<'c, 'p> IntermediatePacket<'c, 'p> {
-    pub fn new(context: &'c mut Context, parser: &'p PacketParser) -> IntermediatePacket<'c, 'p> {
+impl<'c, 'p> Converter<'c, 'p> {
+    pub fn new(context: &'c mut Context, parser: &'p PacketParser) -> Converter<'c, 'p> {
         let spans = parser.map().unwrap().iter().collect();
         let header = parser.header();
         let body = &parser.packet;
@@ -31,17 +28,13 @@ impl<'c, 'p> IntermediatePacket<'c, 'p> {
             body,
         }
     }
-}
 
-impl TryFrom<IntermediatePacket<'_, '_>> for Span<AnyPacket> {
-    type Error = Error;
-
-    fn try_from(mut value: IntermediatePacket) -> StdResult<Self, Self::Error> {
-        value.convert_any_packet()
+    pub fn convert(mut self) -> Result<Span<AnyPacket>> {
+        self.convert_any_packet()
     }
 }
 
-impl IntermediatePacket<'_, '_> {
+impl Converter<'_, '_> {
     const CTB_IDX: usize = 0;
     const LENGTH_IDX: usize = 1;
     const BODY_IDX: usize = 2;
@@ -146,5 +139,119 @@ impl Context {
 
     pub fn advance_offset(&mut self, bytes: usize) {
         self.offset += bytes;
+    }
+}
+
+impl<T> From<&pgp::packet::header::CTB> for OpenPgpCtb<T>
+where
+    T: PacketType,
+{
+    fn from(ctb: &pgp::packet::header::CTB) -> Self {
+        Self::from_openpgp(ctb)
+            .or_else(|_| Self::from_legacy(ctb))
+            .unwrap()
+    }
+}
+
+impl<T> OpenPgpCtb<T>
+where
+    T: PacketType,
+{
+    pub fn from_openpgp(ctb: &pgp::packet::header::CTB) -> Result<Self> {
+        match ctb {
+            pgp::packet::header::CTB::New(_) => Ok(Self(Ctb::new())),
+            pgp::packet::header::CTB::Old(_) => Err(Error::WrongFormat {
+                expected: "OpenPGP".to_string(),
+                got: "Legacy".to_string(),
+            }),
+        }
+    }
+
+    pub fn from_legacy(_ctb: &pgp::packet::header::CTB) -> Result<Self> {
+        Err(Error::Unimplemented)
+    }
+}
+
+impl<T> From<&pgp::packet::header::CTB> for LegacyCtb<T>
+where
+    T: PacketType,
+{
+    fn from(ctb: &pgp::packet::header::CTB) -> Self {
+        Self::from_openpgp(ctb)
+            .or_else(|_| Self::from_legacy(ctb))
+            .unwrap()
+    }
+}
+
+impl<T> LegacyCtb<T>
+where
+    T: PacketType,
+{
+    pub fn from_openpgp(_ctb: &pgp::packet::header::CTB) -> Result<Self> {
+        Err(Error::Unimplemented)
+    }
+
+    pub fn from_legacy(ctb: &pgp::packet::header::CTB) -> Result<Self> {
+        match ctb {
+            pgp::packet::header::CTB::New(_) => Err(Error::WrongFormat {
+                expected: "Legacy".to_string(),
+                got: "OpenPGP".to_string(),
+            }),
+            pgp::packet::header::CTB::Old(_) => Ok(Self(Ctb::new())),
+        }
+    }
+}
+
+impl TryFrom<&pgp::packet::Header> for OpenPgpLength {
+    type Error = Error;
+
+    fn try_from(header: &pgp::packet::Header) -> StdResult<Self, Self::Error> {
+        if let pgp::packet::header::CTB::Old(_) = header.ctb() {
+            return Err(Error::WrongFormat {
+                expected: "OpenPGP".to_string(),
+                got: "Legacy".to_string(),
+            });
+        };
+
+        use pgp::packet::header::BodyLength as PgpBodyLength;
+        let length = match *header.length() {
+            PgpBodyLength::Full(length) => Self::Full(length),
+            PgpBodyLength::Partial(length) => Self::Partial(length),
+            PgpBodyLength::Indeterminate => unreachable!(),
+        };
+        Ok(length)
+    }
+}
+
+impl TryFrom<&pgp::packet::Header> for LegacyLength {
+    type Error = Error;
+
+    fn try_from(header: &pgp::packet::Header) -> StdResult<Self, Self::Error> {
+        if let pgp::packet::header::CTB::New(_) = header.ctb() {
+            return Err(Error::WrongFormat {
+                expected: "Legacy".to_string(),
+                got: "OpenPGP".to_string(),
+            });
+        };
+
+        use pgp::packet::header::BodyLength as PgpBodyLength;
+        let length = match *header.length() {
+            PgpBodyLength::Full(length) => Self::Full(length),
+            PgpBodyLength::Partial(_) => unreachable!(),
+            PgpBodyLength::Indeterminate => Self::Indeterminate,
+        };
+        Ok(length)
+    }
+}
+
+impl From<Span<&pgp::packet::UserID>> for UserId {
+    fn from(value: Span<&pgp::packet::UserID>) -> Self {
+        Self {
+            user_id: Span {
+                offset: value.offset,
+                length: value.length,
+                inner: String::from_utf8_lossy(value.inner.value()).to_string(),
+            },
+        }
     }
 }
