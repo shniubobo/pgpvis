@@ -4,6 +4,8 @@ use std::result::Result as StdResult;
 
 use sequoia_openpgp as pgp;
 
+use crate::packet::PublicKeyAlgorithmId;
+
 pub type Result<T> = StdResult<T, Error>;
 
 #[derive(Debug, thiserror::Error)]
@@ -19,6 +21,22 @@ pub enum Error {
     #[error("failed to parse packet")]
     Parse(#[from] anyhow::Error),
 
+    // This should not occur as long as we define packet fields correctly,
+    // but just in case we do it wrong, we can return this instead of
+    // panicking.
+    #[error("span {field} not found on packet type: {tag}")]
+    SpanNotFound { field: usize, tag: pgp::packet::Tag },
+
+    #[error("{secs} seconds cannot be represented with four octets")]
+    TimeOverflow { secs: u64 },
+
+    // TODO: Remove this after it's no longer needed, i.e., when everything
+    // gets implemented.
+    /// An error returned when something is not yet implemented, but it's not
+    /// feasible to call [`unimplemented!`].
+    #[error("not yet implemented")]
+    Unimplemented,
+
     // TODO: Remove this after we've implemented all packet types.
     #[error("unimplemented packet; type id: {type_id}")]
     UnknownPacket { type_id: u8 },
@@ -32,16 +50,9 @@ pub enum Error {
     #[error("expected CTB format {expected}, got {got}")]
     WrongFormat { expected: String, got: String },
 
-    // TODO: Remove this after it's no longer needed, i.e., when everything
-    // gets implemented.
-    /// An error returned when something is not yet implemented, but it's not
-    /// feasible to call [`unimplemented!`].
-    #[error("not yet implemented")]
-    Unimplemented,
-
-    // This should not occur as long as we define packet fields correctly,
-    // but just in case we do it wrong, we can return this instead of
-    // panicking.
-    #[error("span {field} not found on packet type: {tag}")]
-    SpanNotFound { field: usize, tag: pgp::packet::Tag },
+    #[error("expected public key algorithm {expected}, got {got}")]
+    WrongPublicKeyAlgorithm {
+        expected: PublicKeyAlgorithmId,
+        got: pgp::types::PublicKeyAlgorithm,
+    },
 }

@@ -1,8 +1,14 @@
 //! OpenPGP-related data structures to be passed across the wasm boundary.
+//!
+//! Some types in this module contains fields of `()`, which means the actual
+//! value should be accessed via a getter method, and the sole reason that the
+//! field exists is to allow [`Serialize`] and [`Tsify`] to be correctly
+//! derived.
 
 use std::marker::PhantomData;
 use std::result::Result as StdResult;
 
+use derive_more::Display;
 use serde::{Serialize, Serializer};
 use serde_repr::Serialize_repr;
 use tsify_next::Tsify;
@@ -76,7 +82,9 @@ macro_rules! gen_packet_enums_and_impls {
 }
 
 gen_packet_enums_and_impls! {
+    PublicKey = 6,
     UserId = 13,
+    PublicSubkey = 14,
     Private60 = 60,
 }
 
@@ -101,6 +109,27 @@ impl<T> Span<T> {
             length,
             inner,
         }
+    }
+
+    /// Return a new [`Span`] with a new [`inner`](Self::inner) field.
+    pub fn replace_with<U>(&self, new_inner: U) -> Span<U> {
+        Span {
+            offset: self.offset,
+            length: self.length,
+            inner: new_inner,
+        }
+    }
+
+    pub fn transpose<U>(self) -> Span<U>
+    where
+        T: Into<U>,
+    {
+        let (span, inner) = self.take();
+        span.replace_with(inner.into())
+    }
+
+    fn take(self) -> (Span<()>, T) {
+        (self.replace_with(()), self.inner)
     }
 }
 
@@ -232,6 +261,196 @@ where
 {
     fn from(value: T) -> Self {
         Self(value)
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Serialize, Tsify)]
+#[serde(untagged)]
+#[non_exhaustive]
+pub enum PublicKey {
+    Version4RsaEncryptSign(PublicVersion4<Key, RsaEncryptSign>),
+    Version4Ed25519(PublicVersion4<Key, Ed25519>),
+}
+
+#[derive(Debug, PartialEq, Eq, Serialize, Tsify)]
+#[serde(untagged)]
+#[non_exhaustive]
+pub enum PublicSubkey {
+    Version4RsaEncryptSign(PublicVersion4<Subkey, RsaEncryptSign>),
+    Version4Ed25519(PublicVersion4<Subkey, Ed25519>),
+}
+
+#[derive(Debug, PartialEq, Eq, Serialize, Tsify)]
+pub struct PublicVersion4<R, A>
+where
+    R: KeyRole,
+    A: PublicKeyAlgorithm,
+{
+    /// Marker field for key role, either [`Key`] or [`Subkey`].
+    #[serde(skip)]
+    role: R,
+
+    #[serde(serialize_with = "PublicVersion4::<R, A>::serialize_version")]
+    #[tsify(type = "Span<4>")]
+    version: Span<()>,
+
+    pub creation_time: Span<Time>,
+
+    #[serde(serialize_with = "PublicVersion4::<R, A>::serialize_algorithm")]
+    #[tsify(type = "Span<PublicKeyAlgorithmId>")]
+    algorithm: Span<()>,
+
+    pub key_material: Span<A>,
+}
+
+impl<R, A> PublicVersion4<R, A>
+where
+    R: KeyRole,
+    A: PublicKeyAlgorithm,
+{
+    pub const VERSION: u8 = 4;
+
+    pub fn new(
+        version_span: Span<()>,
+        creation_time: Span<Time>,
+        algorithm_span: Span<()>,
+        key_material: Span<A>,
+    ) -> Self {
+        Self {
+            role: R::new(),
+            version: version_span,
+            creation_time,
+            algorithm: algorithm_span,
+            key_material,
+        }
+    }
+
+    fn serialize_version<S>(version: &Span<()>, serializer: S) -> StdResult<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let Span { offset, length, .. } = *version;
+        Span {
+            offset,
+            length,
+            inner: Self::VERSION,
+        }
+        .serialize(serializer)
+    }
+
+    fn serialize_algorithm<S>(algorithm: &Span<()>, serializer: S) -> StdResult<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let Span { offset, length, .. } = *algorithm;
+        Span {
+            offset,
+            length,
+            inner: A::ID,
+        }
+        .serialize(serializer)
+    }
+}
+
+/// Marker trait for [`Key`] and [`Subkey`].
+pub trait KeyRole {
+    fn new() -> Self;
+}
+
+/// Marker struct for primary keys.
+#[derive(Debug, PartialEq, Eq, Serialize)]
+pub struct Key;
+impl KeyRole for Key {
+    fn new() -> Self {
+        Self
+    }
+}
+
+/// Marker struct for subkeys.
+#[derive(Debug, PartialEq, Eq, Serialize)]
+pub struct Subkey;
+impl KeyRole for Subkey {
+    fn new() -> Self {
+        Self
+    }
+}
+
+pub trait PublicKeyAlgorithm {
+    const ID: PublicKeyAlgorithmId;
+}
+
+macro_rules! gen_public_key_algorithm_impls {
+    ( $algorithm:ident ) => {
+        impl PublicKeyAlgorithm for $algorithm {
+            const ID: PublicKeyAlgorithmId = PublicKeyAlgorithmId::$algorithm;
+        }
+    };
+
+    [ $( $algorithm:ident ),+ $(,)? ] => {
+        $( gen_public_key_algorithm_impls!($algorithm); )+
+    };
+}
+
+macro_rules! gen_public_key_algorithm_id_enum {
+    { $( $algorithm:ident = $algorithm_id:literal ),+ $(,)? } => {
+        #[wasm_bindgen]
+        #[derive(Debug, Display, PartialEq, Eq, Serialize_repr)]
+        #[repr(u8)]
+        #[non_exhaustive]
+        pub enum PublicKeyAlgorithmId {
+            $( $algorithm = $algorithm_id ),+
+        }
+    };
+}
+
+macro_rules! gen_public_key_algorithm_enums_and_impls {
+    { $( $algorithm:ident = $algorithm_id:literal ),+ $(,)? } => {
+        gen_public_key_algorithm_impls![$( $algorithm ),+];
+
+        gen_public_key_algorithm_id_enum! {
+            $( $algorithm = $algorithm_id ),+
+        }
+    };
+}
+
+gen_public_key_algorithm_enums_and_impls! {
+    RsaEncryptSign = 1,
+    Ed25519 = 27,
+}
+
+#[derive(Debug, PartialEq, Eq, Serialize, Tsify)]
+pub struct RsaEncryptSign {
+    pub n: Span<Mpi>,
+    pub e: Span<Mpi>,
+}
+
+impl RsaEncryptSign {
+    pub fn new(n: Span<Mpi>, e: Span<Mpi>) -> Self {
+        Self { n, e }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Serialize, Tsify)]
+pub struct Ed25519(Span<[u8; 32]>);
+
+#[derive(Debug, PartialEq, Eq, Serialize, Tsify)]
+pub struct Mpi {
+    length: Span<u16>,
+    integers: Span<Vec<u8>>,
+}
+
+impl Mpi {
+    pub fn new(length: Span<u16>, integers: Span<Vec<u8>>) -> Self {
+        Self { length, integers }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Serialize, Tsify)]
+pub struct Time(u32);
+
+impl Time {
+    pub fn new(secs_since_epoch: u32) -> Self {
+        Self(secs_since_epoch)
     }
 }
 
