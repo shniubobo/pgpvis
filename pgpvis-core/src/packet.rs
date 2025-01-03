@@ -133,6 +133,12 @@ impl<T> Span<T> {
     }
 }
 
+impl<T> std::fmt::Display for Span<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}:{}", self.offset, self.length)
+    }
+}
+
 /// An OpenPGP packet, including the header and the body.
 ///
 /// The type parameter `T` ensures that [`header`](Self::header) and
@@ -170,29 +176,11 @@ pub struct OpenPgpCtb<T>(pub Ctb<T>)
 where
     T: PacketType;
 
-impl<T> From<OpenPgpCtb<T>> for Ctb<T>
-where
-    T: PacketType,
-{
-    fn from(value: OpenPgpCtb<T>) -> Self {
-        value.0
-    }
-}
-
 /// Legacy format newtype variant of [`Ctb`].
 #[derive(Debug, PartialEq, Eq, Serialize, Tsify)]
 pub struct LegacyCtb<T>(pub Ctb<T>)
 where
     T: PacketType;
-
-impl<T> From<LegacyCtb<T>> for Ctb<T>
-where
-    T: PacketType,
-{
-    fn from(value: LegacyCtb<T>) -> Self {
-        value.0
-    }
-}
 
 /// The first byte of each header.
 #[derive(Debug, Default, PartialEq, Eq, Serialize, Tsify)]
@@ -231,11 +219,6 @@ where
         Self::TYPE_ID.serialize(serializer)
     }
 }
-
-/// Marker trait for [`OpenPgpLength`] and [`LegacyLength`].
-pub(crate) trait Length {}
-impl Length for OpenPgpLength {}
-impl Length for LegacyLength {}
 
 #[derive(Debug, PartialEq, Eq, Serialize, Tsify)]
 #[serde(tag = "encoding", content = "length")]
@@ -457,6 +440,12 @@ impl Time {
 #[derive(Debug, PartialEq, Eq, Serialize, Tsify)]
 pub struct UserId {
     pub user_id: Span<String>,
+}
+
+impl UserId {
+    pub fn new(user_id: Span<String>) -> Self {
+        Self { user_id }
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Serialize, Tsify)]

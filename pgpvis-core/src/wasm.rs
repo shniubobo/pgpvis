@@ -38,10 +38,10 @@ fn parse(message: &[u8]) -> Result<PacketSequence> {
         // TODO: Replace the `or_else` call with `?` after we remove
         // `AnyPacket::Unknown` and `Error::UnknownPacket`.
         packet_sequence.0.push(packet.convert().or_else(|err| {
-            if let Error::UnknownPacket { .. } = err {
+            if let Error::UnknownPacket { span, .. } = err {
                 Ok(Span {
-                    offset: 0,
-                    length: 0,
+                    offset: span.offset,
+                    length: span.length,
                     inner: AnyPacket::Unknown,
                 })
             } else {

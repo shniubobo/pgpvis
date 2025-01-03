@@ -4,7 +4,7 @@ use std::result::Result as StdResult;
 
 use sequoia_openpgp as pgp;
 
-use crate::packet::PublicKeyAlgorithmId;
+use crate::packet::{PublicKeyAlgorithmId, Span};
 
 pub type Result<T> = StdResult<T, Error>;
 
@@ -38,8 +38,8 @@ pub enum Error {
     Unimplemented,
 
     // TODO: Remove this after we've implemented all packet types.
-    #[error("unimplemented packet; type id: {type_id}")]
-    UnknownPacket { type_id: u8 },
+    #[error("unimplemented packet at span {span}; type id: {type_id}")]
+    UnknownPacket { type_id: u8, span: Span<()> },
 
     // The plan is that we allow conversion between the two formats in the
     // future, and this `Error` is returned in case a `CTB` of the wrong format

@@ -11,141 +11,62 @@ use crate::error::*;
 use crate::packet::*;
 
 /// Intermediate struct to convert [`PacketParser`] into [`Span<AnyPacket>`].
-pub(crate) struct Converter<'context, 'packet> {
+pub(crate) struct Converter<'context, 'parser, 'message>
+where
+    'message: 'parser,
+{
     context: &'context mut Context,
-    spans: Vec<pgp::parse::map::Field<'packet>>,
-    header: &'packet pgp::packet::Header,
-    body: &'packet pgp::Packet,
+    spans: Vec<pgp::parse::map::Field<'parser>>,
+    parser: &'parser PacketParser<'message>,
     next_field_index: usize,
 }
 
-impl<'c, 'p> Converter<'c, 'p> {
-    pub fn new(context: &'c mut Context, parser: &'p PacketParser) -> Converter<'c, 'p> {
+impl<'c, 'p, 'm> Converter<'c, 'p, 'm> {
+    pub fn new(context: &'c mut Context, parser: &'p PacketParser<'m>) -> Converter<'c, 'p, 'm> {
         let spans = parser.map().unwrap().iter().collect();
-        let header = parser.header();
-        let body = &parser.packet;
         Self {
             context,
             spans,
-            header,
-            body,
+            parser,
             next_field_index: 0,
         }
     }
 
     pub fn convert(mut self) -> Result<Span<AnyPacket>> {
-        self.convert_any_packet()
+        AnyPacket::convert_spanned(self.parser, &mut self)
     }
 }
 
-impl Converter<'_, '_> {
-    fn convert_any_packet(&mut self) -> Result<Span<AnyPacket>> {
-        let offset = self.context.offset();
-        let inner = match self.body {
-            pgp::Packet::PublicKey(public_key) => AnyPacket::PublicKey(Packet {
-                header: self.convert_header()?,
-                body: self.convert_public_key(public_key)?,
-            }),
-            pgp::Packet::UserID(user_id) => AnyPacket::UserId(Packet {
-                header: self.convert_header()?,
-                body: self.convert_user_id(user_id)?,
-            }),
-            pgp::Packet::PublicSubkey(public_subkey) => AnyPacket::PublicSubkey(Packet {
-                header: self.convert_header()?,
-                body: self.convert_public_subkey(public_subkey)?,
-            }),
-            unknown_packet => {
-                return Err(Error::UnknownPacket {
-                    type_id: unknown_packet.tag().into(),
-                });
-            }
-        };
-        let length = self.context.offset() - offset;
-
-        Ok(Span::new(offset, length, inner))
-    }
-
-    fn convert_header<T>(&mut self) -> Result<Span<Header<T>>>
-    where
-        T: PacketType,
-    {
-        let offset = self.context.offset();
-        let header = {
-            match self.header.ctb() {
-                pgp::packet::header::CTB::New(_) => Header::OpenPgp {
-                    ctb: self.convert_ctb()?,
-                    length: self.convert_length()?,
-                },
-                pgp::packet::header::CTB::Old(_) => Header::Legacy {
-                    ctb: self.convert_ctb()?,
-                    length: self.convert_length()?,
-                },
-            }
-        };
-        let length = self.context.offset() - offset;
-
-        Ok(Span::new(offset, length, header))
-    }
-
-    // TODO: Generate the following methods with macros.
-
-    fn convert_ctb<C, P>(&mut self) -> Result<Span<C>>
-    where
-        C: for<'a> From<&'a pgp::packet::header::CTB> + Into<Ctb<P>>,
-        P: PacketType,
-    {
-        let span = self.next_span()?;
-        let ctb = self.header.ctb().into();
-
-        Ok(span.replace_with(ctb))
-    }
-
-    fn convert_length<L>(&mut self) -> Result<Span<L>>
-    where
-        L: for<'a> TryFrom<&'a pgp::packet::Header, Error = Error> + Length,
-    {
-        let span = self.next_span()?;
-        let packet_length = self.header.try_into()?;
-
-        Ok(span.replace_with(packet_length))
-    }
-
-    fn convert_user_id(&mut self, user_id: &pgp::packet::UserID) -> Result<Span<Body<UserId>>> {
-        let span = self.next_span()?;
-        let user_id: UserId = span.replace_with(user_id).into();
-        let body = user_id.into();
-
-        Ok(span.replace_with(body))
-    }
-
-    fn convert_public_key(
-        &mut self,
-        public_key: &pgp::packet::Key<pgp_key::PublicParts, pgp_key::PrimaryRole>,
-    ) -> Result<Span<Body<PublicKey>>> {
-        let public_key_span = PublicKey::convert(public_key, self)?;
-        let body_span = public_key_span.transpose();
-        Ok(body_span)
-    }
-
-    fn convert_public_subkey(
-        &mut self,
-        public_key: &pgp::packet::Key<pgp_key::PublicParts, pgp_key::SubordinateRole>,
-    ) -> Result<Span<Body<PublicSubkey>>> {
-        let public_key_span = PublicSubkey::convert(public_key, self)?;
-        let body_span = public_key_span.transpose();
-        Ok(body_span)
-    }
-
+impl Converter<'_, '_, '_> {
     fn next_span(&mut self) -> Result<Span<()>> {
+        self.next_span_with(())
+    }
+
+    fn next_span_with<T>(&mut self, inner: T) -> Result<Span<T>> {
         let field = self.next_field_index();
         let (offset, length) = self.advance_offset(field)?;
-        Ok(Span::new(offset, length, ()))
+        Ok(Span::new(offset, length, inner))
     }
 
     fn next_field_index(&mut self) -> usize {
         let index = self.next_field_index;
         self.next_field_index += 1;
         index
+    }
+
+    fn spanned<T>(&mut self, closure: impl FnOnce(&mut Self) -> Result<T>) -> Result<Span<T>> {
+        self.spanned_with(&(), |_, converter| closure(converter))
+    }
+
+    fn spanned_with<V, T>(
+        &mut self,
+        value: &V,
+        closure: impl FnOnce(&V, &mut Self) -> Result<T>,
+    ) -> Result<Span<T>> {
+        let offset = self.offset();
+        let inner = closure(value, self)?;
+        let length = self.offset() - offset;
+        Ok(Span::new(offset, length, inner))
     }
 
     fn offset(&self) -> usize {
@@ -155,7 +76,7 @@ impl Converter<'_, '_> {
     fn advance_offset(&mut self, field: usize) -> Result<(usize, usize)> {
         let field = &self.spans.get(field).ok_or(Error::SpanNotFound {
             field,
-            tag: self.body.tag(),
+            tag: self.parser.packet.tag(),
         })?;
         let offset = self.context.offset();
         let length = field.as_bytes().len();
@@ -184,14 +105,94 @@ impl Context {
     }
 }
 
-impl<T> From<&pgp::packet::header::CTB> for OpenPgpCtb<T>
+trait Convert<F> {
+    fn convert_spanned(from: &F, converter: &mut Converter) -> Result<Span<Self>>
+    where
+        Self: Sized,
+    {
+        converter.spanned_with(from, Self::convert)
+    }
+
+    fn convert(from: &F, converter: &mut Converter) -> Result<Self>
+    where
+        Self: Sized;
+}
+
+macro_rules! convert_packet {
+    ($header:ident, $body:ident, $converter:ident) => {{
+        Packet {
+            header: Header::convert_spanned($header, $converter)?,
+            body: Body::convert_spanned($body, $converter)?,
+        }
+    }};
+}
+
+impl Convert<PacketParser<'_>> for AnyPacket {
+    fn convert(from: &PacketParser, converter: &mut Converter) -> Result<Self> {
+        let header = from.header();
+        let body = &from.packet;
+        let ret = match body {
+            pgp::Packet::PublicKey(body) => {
+                AnyPacket::PublicKey(convert_packet!(header, body, converter))
+            }
+            pgp::Packet::UserID(body) => {
+                AnyPacket::UserId(convert_packet!(header, body, converter))
+            }
+            pgp::Packet::PublicSubkey(body) => {
+                AnyPacket::PublicSubkey(convert_packet!(header, body, converter))
+            }
+            unknown_packet => {
+                let span = converter.spanned(|converter| {
+                    // Drain all spans, so that `spanned` record their total length.
+                    while converter.next_span().is_ok() {}
+                    Ok(())
+                })?;
+                return Err(Error::UnknownPacket {
+                    type_id: unknown_packet.tag().into(),
+                    span,
+                });
+            }
+        };
+        Ok(ret)
+    }
+}
+
+impl<T> Convert<pgp::packet::Header> for Header<T>
 where
     T: PacketType,
 {
-    fn from(ctb: &pgp::packet::header::CTB) -> Self {
-        Self::from_openpgp(ctb)
-            .or_else(|_| Self::from_legacy(ctb))
-            .unwrap()
+    fn convert(from: &pgp::packet::Header, converter: &mut Converter) -> Result<Self> {
+        let ctb = from.ctb();
+        let ret = match ctb {
+            pgp::packet::header::CTB::New(_) => Header::OpenPgp {
+                ctb: OpenPgpCtb::convert_spanned(ctb, converter)?,
+                length: OpenPgpLength::convert_spanned(from, converter)?,
+            },
+            pgp::packet::header::CTB::Old(_) => Header::Legacy {
+                ctb: LegacyCtb::convert_spanned(ctb, converter)?,
+                length: LegacyLength::convert_spanned(from, converter)?,
+            },
+        };
+        Ok(ret)
+    }
+}
+
+impl<T> Convert<pgp::packet::header::CTB> for OpenPgpCtb<T>
+where
+    T: PacketType,
+{
+    fn convert_spanned(
+        from: &pgp::packet::header::CTB,
+        converter: &mut Converter,
+    ) -> Result<Span<Self>> {
+        let ctb = Self::from_openpgp(from)
+            .or_else(|_| Self::from_legacy(from))
+            .unwrap();
+        converter.next_span_with(ctb)
+    }
+
+    fn convert(_from: &pgp::packet::header::CTB, _converter: &mut Converter) -> Result<Self> {
+        unreachable!()
     }
 }
 
@@ -214,14 +215,22 @@ where
     }
 }
 
-impl<T> From<&pgp::packet::header::CTB> for LegacyCtb<T>
+impl<T> Convert<pgp::packet::header::CTB> for LegacyCtb<T>
 where
     T: PacketType,
 {
-    fn from(ctb: &pgp::packet::header::CTB) -> Self {
-        Self::from_openpgp(ctb)
-            .or_else(|_| Self::from_legacy(ctb))
-            .unwrap()
+    fn convert_spanned(
+        from: &pgp::packet::header::CTB,
+        converter: &mut Converter,
+    ) -> Result<Span<Self>> {
+        let ctb = Self::from_openpgp(from)
+            .or_else(|_| Self::from_legacy(from))
+            .unwrap();
+        converter.next_span_with(ctb)
+    }
+
+    fn convert(_from: &pgp::packet::header::CTB, _converter: &mut Converter) -> Result<Self> {
+        unreachable!()
     }
 }
 
@@ -244,11 +253,12 @@ where
     }
 }
 
-impl TryFrom<&pgp::packet::Header> for OpenPgpLength {
-    type Error = Error;
-
-    fn try_from(header: &pgp::packet::Header) -> StdResult<Self, Self::Error> {
-        if let pgp::packet::header::CTB::Old(_) = header.ctb() {
+impl Convert<pgp::packet::Header> for OpenPgpLength {
+    fn convert_spanned(
+        from: &pgp::packet::Header,
+        converter: &mut Converter,
+    ) -> Result<Span<Self>> {
+        if let pgp::packet::header::CTB::Old(_) = from.ctb() {
             return Err(Error::WrongFormat {
                 expected: "OpenPGP".to_string(),
                 got: "Legacy".to_string(),
@@ -256,20 +266,25 @@ impl TryFrom<&pgp::packet::Header> for OpenPgpLength {
         };
 
         use pgp::packet::header::BodyLength as PgpBodyLength;
-        let length = match *header.length() {
+        let length = match *from.length() {
             PgpBodyLength::Full(length) => Self::Full(length),
             PgpBodyLength::Partial(length) => Self::Partial(length),
             PgpBodyLength::Indeterminate => unreachable!(),
         };
-        Ok(length)
+        converter.next_span_with(length)
+    }
+
+    fn convert(_from: &pgp::packet::Header, _converter: &mut Converter) -> Result<Self> {
+        unreachable!()
     }
 }
 
-impl TryFrom<&pgp::packet::Header> for LegacyLength {
-    type Error = Error;
-
-    fn try_from(header: &pgp::packet::Header) -> StdResult<Self, Self::Error> {
-        if let pgp::packet::header::CTB::New(_) = header.ctb() {
+impl Convert<pgp::packet::Header> for LegacyLength {
+    fn convert_spanned(
+        from: &pgp::packet::Header,
+        converter: &mut Converter,
+    ) -> Result<Span<Self>> {
+        if let pgp::packet::header::CTB::New(_) = from.ctb() {
             return Err(Error::WrongFormat {
                 expected: "Legacy".to_string(),
                 got: "OpenPGP".to_string(),
@@ -277,35 +292,44 @@ impl TryFrom<&pgp::packet::Header> for LegacyLength {
         };
 
         use pgp::packet::header::BodyLength as PgpBodyLength;
-        let length = match *header.length() {
+        let length = match *from.length() {
             PgpBodyLength::Full(length) => Self::Full(length),
             PgpBodyLength::Partial(_) => unreachable!(),
             PgpBodyLength::Indeterminate => Self::Indeterminate,
         };
-        Ok(length)
+        converter.next_span_with(length)
+    }
+
+    fn convert(_from: &pgp::packet::Header, _converter: &mut Converter) -> Result<Self> {
+        unreachable!()
     }
 }
 
-trait Convert<F> {
-    fn convert(from: &F, converter: &mut Converter) -> Result<Span<Self>>
-    where
-        Self: Sized;
+impl<F, T> Convert<F> for Body<T>
+where
+    T: PacketType + Convert<F>,
+{
+    fn convert_spanned(from: &F, converter: &mut Converter) -> Result<Span<Self>> {
+        Ok(T::convert_spanned(from, converter)?.transpose())
+    }
+
+    fn convert(_from: &F, _converter: &mut Converter) -> Result<Self> {
+        unreachable!()
+    }
 }
 
 impl Convert<pgp::packet::Key<pgp_key::PublicParts, pgp_key::PrimaryRole>> for PublicKey {
     fn convert(
         from: &pgp::packet::Key<pgp_key::PublicParts, pgp_key::PrimaryRole>,
         converter: &mut Converter,
-    ) -> Result<Span<Self>> {
+    ) -> Result<Self> {
         if let pgp::packet::Key::V4(key) = from {
-            let offset = converter.offset();
-
             let version_span = converter.next_span()?;
-            let creation_time = Time::convert(from, converter)?;
+            let creation_time = Time::convert_spanned(from, converter)?;
             let algorithm_span = converter.next_span()?;
             let ret = match key.pk_algo() {
                 pgp::types::PublicKeyAlgorithm::RSAEncryptSign => {
-                    let key_material = RsaEncryptSign::convert(from.mpis(), converter)?;
+                    let key_material = RsaEncryptSign::convert_spanned(from.mpis(), converter)?;
                     Self::Version4RsaEncryptSign(PublicVersion4::new(
                         version_span,
                         creation_time,
@@ -315,10 +339,7 @@ impl Convert<pgp::packet::Key<pgp_key::PublicParts, pgp_key::PrimaryRole>> for P
                 }
                 _ => return Err(Error::Unimplemented),
             };
-
-            let length = converter.offset() - offset;
-
-            return Ok(Span::new(offset, length, ret));
+            return Ok(ret);
         };
         Err(Error::Unimplemented)
     }
@@ -328,16 +349,15 @@ impl Convert<pgp::packet::Key<pgp_key::PublicParts, pgp_key::SubordinateRole>> f
     fn convert(
         from: &pgp::packet::Key<pgp_key::PublicParts, pgp_key::SubordinateRole>,
         converter: &mut Converter,
-    ) -> Result<Span<Self>> {
+    ) -> Result<Self> {
+        // Exactly the same as `PublicKey`'s implementation; maybe should be deduplicated.
         if let pgp::packet::Key::V4(key) = from {
-            let offset = converter.offset();
-
             let version_span = converter.next_span()?;
-            let creation_time = Time::convert(from, converter)?;
+            let creation_time = Time::convert_spanned(from, converter)?;
             let algorithm_span = converter.next_span()?;
             let ret = match key.pk_algo() {
                 pgp::types::PublicKeyAlgorithm::RSAEncryptSign => {
-                    let key_material = RsaEncryptSign::convert(from.mpis(), converter)?;
+                    let key_material = RsaEncryptSign::convert_spanned(from.mpis(), converter)?;
                     Self::Version4RsaEncryptSign(PublicVersion4::new(
                         version_span,
                         creation_time,
@@ -347,10 +367,7 @@ impl Convert<pgp::packet::Key<pgp_key::PublicParts, pgp_key::SubordinateRole>> f
                 }
                 _ => return Err(Error::Unimplemented),
             };
-
-            let length = converter.offset() - offset;
-
-            return Ok(Span::new(offset, length, ret));
+            return Ok(ret);
         };
         Err(Error::Unimplemented)
     }
@@ -360,13 +377,20 @@ impl<R> Convert<pgp::packet::Key<pgp_key::PublicParts, R>> for Time
 where
     R: pgp_key::KeyRole,
 {
-    fn convert(
+    fn convert_spanned(
         from: &pgp::packet::Key<pgp_key::PublicParts, R>,
         converter: &mut Converter,
     ) -> Result<Span<Self>> {
-        let span = converter.next_span()?;
         let creation_time = from.creation_time().try_into()?;
-        Ok(span.replace_with(creation_time))
+        let span = converter.next_span_with(creation_time)?;
+        Ok(span)
+    }
+
+    fn convert(
+        _from: &pgp::packet::Key<pgp_key::PublicParts, R>,
+        _converter: &mut Converter,
+    ) -> Result<Self> {
+        unreachable!()
     }
 }
 
@@ -383,21 +407,13 @@ impl TryFrom<SystemTime> for Time {
 }
 
 impl Convert<pgp::crypto::mpi::PublicKey> for RsaEncryptSign {
-    fn convert(
-        from: &pgp::crypto::mpi::PublicKey,
-        converter: &mut Converter,
-    ) -> Result<Span<Self>> {
+    fn convert(from: &pgp::crypto::mpi::PublicKey, converter: &mut Converter) -> Result<Self> {
         if let pgp::crypto::mpi::PublicKey::RSA { e, n } = from {
-            let offset = converter.offset();
-
-            let n = Mpi::convert(n, converter)?;
-            let e = Mpi::convert(e, converter)?;
-
-            let length = converter.offset() - offset;
-
-            let ret = RsaEncryptSign::new(n, e);
-            return Ok(Span::new(offset, length, ret));
+            let n = Mpi::convert_spanned(n, converter)?;
+            let e = Mpi::convert_spanned(e, converter)?;
+            return Ok(RsaEncryptSign::new(n, e));
         }
+
         Err(Error::WrongPublicKeyAlgorithm {
             expected: Self::ID,
             got: from
@@ -409,35 +425,19 @@ impl Convert<pgp::crypto::mpi::PublicKey> for RsaEncryptSign {
 }
 
 impl Convert<pgp::crypto::mpi::MPI> for Mpi {
-    fn convert(from: &pgp::crypto::mpi::MPI, converter: &mut Converter) -> Result<Span<Self>> {
-        let offset = converter.offset();
-
-        let length_field_span = converter.next_span()?;
+    fn convert(from: &pgp::crypto::mpi::MPI, converter: &mut Converter) -> Result<Self> {
         // As per RFC 9580, the length is reprensented by two octets only, so
         // casting to `u16` is safe.
-        let length_field = length_field_span.replace_with(from.bits() as u16);
-        let integers_span = converter.next_span()?;
-        let integers = integers_span.replace_with(from.value().to_vec());
-        let mpi = Mpi::new(length_field, integers);
-
-        let span_length = converter.offset() - offset;
-
-        Ok(Span {
-            offset,
-            length: span_length,
-            inner: mpi,
-        })
+        let length_field_span = converter.next_span_with(from.bits() as u16)?;
+        let integers_span = converter.next_span_with(from.value().to_vec())?;
+        Ok(Mpi::new(length_field_span, integers_span))
     }
 }
 
-impl From<Span<&pgp::packet::UserID>> for UserId {
-    fn from(value: Span<&pgp::packet::UserID>) -> Self {
-        Self {
-            user_id: Span {
-                offset: value.offset,
-                length: value.length,
-                inner: String::from_utf8_lossy(value.inner.value()).to_string(),
-            },
-        }
+impl Convert<pgp::packet::UserID> for UserId {
+    fn convert(from: &pgp::packet::UserID, converter: &mut Converter) -> Result<Self> {
+        let user_id_field = String::from_utf8_lossy(from.value()).to_string();
+        let span = converter.next_span_with(user_id_field)?;
+        Ok(UserId::new(span))
     }
 }
