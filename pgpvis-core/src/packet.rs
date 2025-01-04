@@ -90,7 +90,6 @@ gen_packet_enums_and_impls! {
 
 /// Newtype for [`Vec<Span<AnyPacket>>`].
 #[derive(Debug, PartialEq, Eq, Serialize, Tsify)]
-#[tsify(into_wasm_abi)]
 pub struct PacketSequence(pub Vec<Span<AnyPacket>>);
 
 /// Information of where a [`Packet`], [`Header`], [`Body`], etc., or a header
@@ -284,6 +283,8 @@ where
     algorithm: Span<()>,
 
     pub key_material: Span<A>,
+
+    pub key_id: String,
 }
 
 impl<R, A> PublicVersion4<R, A>
@@ -298,6 +299,7 @@ where
         creation_time: Span<Time>,
         algorithm_span: Span<()>,
         key_material: Span<A>,
+        key_id: String,
     ) -> Self {
         Self {
             role: R::new(),
@@ -305,6 +307,7 @@ where
             creation_time,
             algorithm: algorithm_span,
             key_material,
+            key_id,
         }
     }
 

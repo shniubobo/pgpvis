@@ -10,6 +10,9 @@ pub type Result<T> = StdResult<T, Error>;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    #[error("failed to read message")]
+    Read(#[from] std::io::Error),
+
     /// An error has been returned from [`sequoia_openpgp`].
     ///
     /// [`sequoia_openpgp`] currently returns [`anyhow::Error`], which is [bad

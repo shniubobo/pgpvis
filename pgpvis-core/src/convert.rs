@@ -327,6 +327,7 @@ impl Convert<pgp::packet::Key<pgp_key::PublicParts, pgp_key::PrimaryRole>> for P
             let version_span = converter.next_span()?;
             let creation_time = Time::convert_spanned(from, converter)?;
             let algorithm_span = converter.next_span()?;
+            let key_id = from.keyid().to_hex();
             let ret = match key.pk_algo() {
                 pgp::types::PublicKeyAlgorithm::RSAEncryptSign => {
                     let key_material = RsaEncryptSign::convert_spanned(from.mpis(), converter)?;
@@ -335,6 +336,7 @@ impl Convert<pgp::packet::Key<pgp_key::PublicParts, pgp_key::PrimaryRole>> for P
                         creation_time,
                         algorithm_span,
                         key_material,
+                        key_id,
                     ))
                 }
                 _ => return Err(Error::Unimplemented),
@@ -355,6 +357,7 @@ impl Convert<pgp::packet::Key<pgp_key::PublicParts, pgp_key::SubordinateRole>> f
             let version_span = converter.next_span()?;
             let creation_time = Time::convert_spanned(from, converter)?;
             let algorithm_span = converter.next_span()?;
+            let key_id = from.keyid().to_hex();
             let ret = match key.pk_algo() {
                 pgp::types::PublicKeyAlgorithm::RSAEncryptSign => {
                     let key_material = RsaEncryptSign::convert_spanned(from.mpis(), converter)?;
@@ -363,6 +366,7 @@ impl Convert<pgp::packet::Key<pgp_key::PublicParts, pgp_key::SubordinateRole>> f
                         creation_time,
                         algorithm_span,
                         key_material,
+                        key_id,
                     ))
                 }
                 _ => return Err(Error::Unimplemented),

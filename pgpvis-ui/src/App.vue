@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 
-import { parse, TypeId, type PacketSequence } from "pgpvis-core";
+import { parse, TypeId, type PacketSequence, type ParseOptions, type UserId } from "pgpvis-core";
 
 const message = ref("");
+const bytes = ref<number[]>([])
 const packets = ref<PacketSequence>([]);
 
 const user_ids = computed(() => {
@@ -13,7 +14,8 @@ const user_ids = computed(() => {
       continue;
     }
     if (packet.inner.header.inner.ctb.inner.type_id === TypeId.UserId) {
-      user_ids.push(packet.inner.body.inner!.user_id);
+      const user_id = packet.inner.body.inner as UserId;
+      user_ids.push(user_id.user_id);
     }
   }
   return user_ids;
@@ -21,7 +23,10 @@ const user_ids = computed(() => {
 
 function do_parse() {
   const encoded = new TextEncoder().encode(message.value);
-  packets.value = parse(encoded);
+  const parse_options: ParseOptions = { dearmor: true };
+  const parse_output = parse(parse_options, encoded);
+  bytes.value = parse_output.bytes;
+  packets.value = parse_output.packet_sequence;
 }
 </script>
 
