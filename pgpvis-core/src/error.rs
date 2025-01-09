@@ -27,8 +27,8 @@ pub enum Error {
     // This should not occur as long as we define packet fields correctly,
     // but just in case we do it wrong, we can return this instead of
     // panicking.
-    #[error("span {field} not found on packet type: {tag}")]
-    SpanNotFound { field: usize, tag: pgp::packet::Tag },
+    #[error("span {field} not found")]
+    SpanNotFound { field: usize },
 
     // This should never be created, as long as `sequoia_openpgp` is
     // functioning correctly.

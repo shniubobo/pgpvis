@@ -67,10 +67,11 @@ fn parse(options: ParseOptions, message: &[u8]) -> Result<ParseOutput> {
     let mut context = Context::new();
 
     while let PacketParserResult::Some(parser) = parser_result {
-        let converter = Converter::new(&mut context, &parser);
+        let field_lengths = Converter::field_lengths(&parser);
+        let converter = Converter::new(&mut context, field_lengths);
         // TODO: Replace the `or_else` call with `?` after we remove
         // `AnyPacket::Unknown` and `Error::UnknownPacket`.
-        packet_sequence.0.push(converter.convert().or_else(|err| {
+        let packet = converter.convert(&parser).or_else(|err| {
             if let Error::UnknownPacket { span, .. } = err {
                 Ok(Span {
                     offset: span.offset,
@@ -80,7 +81,8 @@ fn parse(options: ParseOptions, message: &[u8]) -> Result<ParseOutput> {
             } else {
                 Err(err)
             }
-        })?);
+        })?;
+        packet_sequence.0.push(packet);
 
         parser_result = parser.next()?.1
     }

@@ -11,34 +11,55 @@ use crate::error::*;
 use crate::packet::*;
 
 /// Converts [`PacketParser`] into [`Span<AnyPacket>`].
-pub(crate) struct Converter<'context, 'parser, 'message>
-where
-    // Not sure whether this is necessary, or correct.
-    'message: 'parser,
-{
+pub(crate) struct Converter<'context> {
     context: &'context mut Context,
-    spans: Vec<pgp::parse::map::Field<'parser>>,
-    parser: &'parser PacketParser<'message>,
+    field_lengths: Vec<usize>,
     next_field_index: usize,
 }
 
-impl<'c, 'p, 'm> Converter<'c, 'p, 'm> {
-    pub fn new(context: &'c mut Context, parser: &'p PacketParser<'m>) -> Converter<'c, 'p, 'm> {
-        let spans = parser.map().unwrap().iter().collect();
+impl<'c> Converter<'c> {
+    /// Constructs a new [`Converter`].
+    ///
+    /// - `context`: A [`Context`] shared by multiple [`Converter`]s, so as to
+    ///   keep track of the parsing states.
+    /// - `field_lengths`: A [`Vec`] containing the length of each packet field,
+    ///   retrieved by calling [`Converter::field_lengths`].
+    // We ask for `field_lengths` here instead of a `&PacketParser`, so that we
+    // don't need to mock the parser for testing.
+    pub fn new(context: &'c mut Context, field_lengths: Vec<usize>) -> Converter<'c> {
         Self {
             context,
-            spans,
-            parser,
+            field_lengths,
             next_field_index: 0,
         }
     }
 
-    pub fn convert(mut self) -> Result<Span<AnyPacket>> {
-        AnyPacket::convert_spanned(self.parser, &mut self)
+    /// Acquire the length of each field, which is required by [`Converter::new`].
+    ///
+    /// Mapping must be enabled on the [`PacketParser`].
+    pub fn field_lengths(parser: &PacketParser) -> Vec<usize> {
+        parser
+            .map()
+            .expect("mapping must be enabled on the parser")
+            .iter()
+            .map(|field| field.as_bytes().len())
+            .collect()
+    }
+
+    // Although we only need a mutable reference to `self` instead of ownership,
+    // requiring the latter prevents `convert` from being called for multiple
+    // times on the same `Converter`. This is intended, mainly because it doesn't
+    // make sense to call `convert` multiple times with different `parser`s, since
+    // they don't share the same `field_lengths`. Another reason is that
+    // `next_field_index` is not reset to 0 after each call, though this one is
+    // not as significant as the previous, and can be solved by simply resetting
+    // the field.
+    pub fn convert(mut self, parser: &PacketParser) -> Result<Span<AnyPacket>> {
+        AnyPacket::convert_spanned(parser, &mut self)
     }
 }
 
-impl Converter<'_, '_, '_> {
+impl Converter<'_> {
     /// Return the next span, as indicated by [`next_field_index`](Self::next_field_index),
     /// without an inner value.
     fn next_span(&mut self) -> Result<Span<()>> {
@@ -86,15 +107,14 @@ impl Converter<'_, '_, '_> {
     /// length of the `field`-th field, returning the offset and length of that
     /// field, which is useful for the creation of a [`Span`].
     fn advance_offset(&mut self, field: usize) -> Result<(usize, usize)> {
-        let field = &self.spans.get(field).ok_or(Error::SpanNotFound {
-            field,
-            tag: self.parser.packet.tag(),
-        })?;
+        let field_length = *self
+            .field_lengths
+            .get(field)
+            .ok_or(Error::SpanNotFound { field })?;
         let offset = self.context.offset();
-        let length = field.as_bytes().len();
-        self.context.advance_offset(length);
+        self.context.advance_offset(field_length);
 
-        Ok((offset, length))
+        Ok((offset, field_length))
     }
 }
 
