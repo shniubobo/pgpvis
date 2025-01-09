@@ -32,8 +32,10 @@ pub struct ParseOutput {
 
 /// Parses a OpenPGP message as defined in [RFC 9580].
 ///
-/// - `message`: Either armored or unarmored message. If armored, it is
-///   automatically dearmored.
+/// - `options`: Options deciding how the message should be parsed.
+/// - `message`: Either armored or unarmored message. If armored and
+///   [`options.dearmor`](ParseOptions::dearmor) is `true`, the message will be
+///   dearmored before being further parsed.
 ///
 /// [RFC 9580]: https://datatracker.ietf.org/doc/html/rfc9580
 #[wasm_bindgen(js_name = "parse")]
@@ -65,10 +67,10 @@ fn parse(options: ParseOptions, message: &[u8]) -> Result<ParseOutput> {
     let mut context = Context::new();
 
     while let PacketParserResult::Some(parser) = parser_result {
-        let packet = Converter::new(&mut context, &parser);
+        let converter = Converter::new(&mut context, &parser);
         // TODO: Replace the `or_else` call with `?` after we remove
         // `AnyPacket::Unknown` and `Error::UnknownPacket`.
-        packet_sequence.0.push(packet.convert().or_else(|err| {
+        packet_sequence.0.push(converter.convert().or_else(|err| {
             if let Error::UnknownPacket { span, .. } = err {
                 Ok(Span {
                     offset: span.offset,

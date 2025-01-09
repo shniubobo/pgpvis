@@ -12,7 +12,7 @@ use derive_more::Display;
 use serde::{Serialize, Serializer};
 use serde_repr::Serialize_repr;
 use tsify_next::Tsify;
-use wasm_bindgen::prelude::*;
+use wasm_bindgen::prelude::wasm_bindgen;
 
 /// Trait implemented by every struct that represents a certain type of packet.
 ///
@@ -110,15 +110,7 @@ impl<T> Span<T> {
         }
     }
 
-    /// Return a new [`Span`] with a new [`inner`](Self::inner) field.
-    pub fn replace_with<U>(&self, new_inner: U) -> Span<U> {
-        Span {
-            offset: self.offset,
-            length: self.length,
-            inner: new_inner,
-        }
-    }
-
+    /// Convert the inner value into `U`, keeping the span info.
     pub fn transpose<U>(self) -> Span<U>
     where
         T: Into<U>,
@@ -127,11 +119,26 @@ impl<T> Span<T> {
         span.replace_with(inner.into())
     }
 
+    /// Take the inner value, returning a new [`Span`] without an inner
+    /// value, and the old inner.
     fn take(self) -> (Span<()>, T) {
         (self.replace_with(()), self.inner)
     }
+
+    /// Return a new [`Span`] with a new [`inner`](Self::inner) field.
+    fn replace_with<U>(&self, new_inner: U) -> Span<U> {
+        Span {
+            offset: self.offset,
+            length: self.length,
+            inner: new_inner,
+        }
+    }
 }
 
+// This is currently only used by `Error::UnknownPacket`, which may be
+// removed in the future.
+//
+// TODO: Remove this when it's no longer needed.
 impl<T> std::fmt::Display for Span<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}:{}", self.offset, self.length)
@@ -246,6 +253,8 @@ where
     }
 }
 
+/// Enum for every kind of public keys, each variant being a combination of
+/// a certain version and algorithm.
 #[derive(Debug, PartialEq, Eq, Serialize, Tsify)]
 #[serde(untagged)]
 #[non_exhaustive]
@@ -254,6 +263,8 @@ pub enum PublicKey {
     Version4Ed25519(PublicVersion4<Key, Ed25519>),
 }
 
+/// Enum for every kind of public subkeys, each variant being a combination of
+/// a certain version and algorithm.
 #[derive(Debug, PartialEq, Eq, Serialize, Tsify)]
 #[serde(untagged)]
 #[non_exhaustive]
@@ -262,6 +273,7 @@ pub enum PublicSubkey {
     Version4Ed25519(PublicVersion4<Subkey, Ed25519>),
 }
 
+/// The public part of a version 4 key or subkey.
 #[derive(Debug, PartialEq, Eq, Serialize, Tsify)]
 pub struct PublicVersion4<R, A>
 where
@@ -284,6 +296,12 @@ where
 
     pub key_material: Span<A>,
 
+    /// The Key ID of the key or subkey.
+    ///
+    /// This is not directly stored in a packet, but rather calculated by the
+    /// implementation from the key. However, it may be useful to store this
+    /// information here instead of requiring the js part of the project to do
+    /// the calculation.
     pub key_id: String,
 }
 
@@ -302,7 +320,7 @@ where
         key_id: String,
     ) -> Self {
         Self {
-            role: R::new(),
+            role: R::default(),
             version: version_span,
             creation_time,
             algorithm: algorithm_span,
@@ -339,28 +357,19 @@ where
 }
 
 /// Marker trait for [`Key`] and [`Subkey`].
-pub trait KeyRole {
-    fn new() -> Self;
-}
+pub trait KeyRole: Default {}
 
 /// Marker struct for primary keys.
-#[derive(Debug, PartialEq, Eq, Serialize)]
+#[derive(Debug, Default, PartialEq, Eq, Serialize)]
 pub struct Key;
-impl KeyRole for Key {
-    fn new() -> Self {
-        Self
-    }
-}
+impl KeyRole for Key {}
 
 /// Marker struct for subkeys.
-#[derive(Debug, PartialEq, Eq, Serialize)]
+#[derive(Debug, Default, PartialEq, Eq, Serialize)]
 pub struct Subkey;
-impl KeyRole for Subkey {
-    fn new() -> Self {
-        Self
-    }
-}
+impl KeyRole for Subkey {}
 
+/// Trait implemented by every public key algorithm struct.
 pub trait PublicKeyAlgorithm {
     const ID: PublicKeyAlgorithmId;
 }
@@ -379,6 +388,9 @@ macro_rules! gen_public_key_algorithm_impls {
 
 macro_rules! gen_public_key_algorithm_id_enum {
     { $( $algorithm:ident = $algorithm_id:literal ),+ $(,)? } => {
+        /// Every possible ID of public key algorithms as defined by [RFC 9580].
+        ///
+        /// [RFC 9580]: https://datatracker.ietf.org/doc/html/rfc9580#section-9.1
         #[wasm_bindgen]
         #[derive(Debug, Display, PartialEq, Eq, Serialize_repr)]
         #[repr(u8)]
@@ -431,8 +443,9 @@ impl Mpi {
     }
 }
 
+/// Newtype of [`u32`], representing seconds since the unix epoch.
 #[derive(Debug, PartialEq, Eq, Serialize, Tsify)]
-pub struct Time(u32);
+pub struct Time(pub u32);
 
 impl Time {
     pub fn new(secs_since_epoch: u32) -> Self {

@@ -10,9 +10,10 @@ use sequoia_openpgp::{self as pgp, packet::key as pgp_key, parse::PacketParser};
 use crate::error::*;
 use crate::packet::*;
 
-/// Intermediate struct to convert [`PacketParser`] into [`Span<AnyPacket>`].
+/// Converts [`PacketParser`] into [`Span<AnyPacket>`].
 pub(crate) struct Converter<'context, 'parser, 'message>
 where
+    // Not sure whether this is necessary, or correct.
     'message: 'parser,
 {
     context: &'context mut Context,
@@ -38,26 +39,33 @@ impl<'c, 'p, 'm> Converter<'c, 'p, 'm> {
 }
 
 impl Converter<'_, '_, '_> {
+    /// Return the next span, as indicated by [`next_field_index`](Self::next_field_index),
+    /// without an inner value.
     fn next_span(&mut self) -> Result<Span<()>> {
         self.next_span_with(())
     }
 
+    /// Return the next span, as indicated by [`next_field_index`](Self::next_field_index),
+    /// with the inner value being `inner`.
     fn next_span_with<T>(&mut self, inner: T) -> Result<Span<T>> {
         let field = self.next_field_index();
         let (offset, length) = self.advance_offset(field)?;
         Ok(Span::new(offset, length, inner))
     }
 
+    /// Return the next field index, and advance the index.
     fn next_field_index(&mut self) -> usize {
         let index = self.next_field_index;
         self.next_field_index += 1;
         index
     }
 
+    /// Record the span length advanced by `closure`.
     fn spanned<T>(&mut self, closure: impl FnOnce(&mut Self) -> Result<T>) -> Result<Span<T>> {
         self.spanned_with(&(), |_, converter| closure(converter))
     }
 
+    /// Record the span length advanced by `closure`, passing `value` to `closure`.
     fn spanned_with<V, T>(
         &mut self,
         value: &V,
@@ -69,10 +77,14 @@ impl Converter<'_, '_, '_> {
         Ok(Span::new(offset, length, inner))
     }
 
+    /// The current offset as recorded by [`context`](Self::context).
     fn offset(&self) -> usize {
         self.context.offset()
     }
 
+    /// Advance the offset as recorded by [`context`](Self::context), by the
+    /// length of the `field`-th field, returning the offset and length of that
+    /// field, which is useful for the creation of a [`Span`].
     fn advance_offset(&mut self, field: usize) -> Result<(usize, usize)> {
         let field = &self.spans.get(field).ok_or(Error::SpanNotFound {
             field,
@@ -105,7 +117,18 @@ impl Context {
     }
 }
 
+/// Implemented by types in [`packet`](crate::packet), so that they can be
+/// converted from types in [`sequoia_openpgp`].
+///
+/// [`convert_spanned`](Convert::convert_spanned) is a provided method, but
+/// the implmentation may override it if the [`Span`] should not be
+/// automatically recorded, in which case [`convert`](Convert::convert) should
+/// be [`unreachable!`].
+///
+/// Callers should always call [`convert_spanned`](Convert::convert_spanned),
+/// and never [`convert`](Convert::convert).
 trait Convert<F> {
+    /// Convert and record the span length advanced during conversion.
     fn convert_spanned(from: &F, converter: &mut Converter) -> Result<Span<Self>>
     where
         Self: Sized,
@@ -119,12 +142,12 @@ trait Convert<F> {
 }
 
 macro_rules! convert_packet {
-    ($header:ident, $body:ident, $converter:ident) => {{
+    ($header:ident, $body:ident, $converter:ident) => {
         Packet {
             header: Header::convert_spanned($header, $converter)?,
             body: Body::convert_spanned($body, $converter)?,
         }
-    }};
+    };
 }
 
 impl Convert<PacketParser<'_>> for AnyPacket {

@@ -10,9 +10,6 @@ pub type Result<T> = StdResult<T, Error>;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    #[error("failed to read message")]
-    Read(#[from] std::io::Error),
-
     /// An error has been returned from [`sequoia_openpgp`].
     ///
     /// [`sequoia_openpgp`] currently returns [`anyhow::Error`], which is [bad
@@ -24,12 +21,17 @@ pub enum Error {
     #[error("failed to parse packet")]
     Parse(#[from] anyhow::Error),
 
+    #[error("failed to read message")]
+    Read(#[from] std::io::Error),
+
     // This should not occur as long as we define packet fields correctly,
     // but just in case we do it wrong, we can return this instead of
     // panicking.
     #[error("span {field} not found on packet type: {tag}")]
     SpanNotFound { field: usize, tag: pgp::packet::Tag },
 
+    // This should never be created, as long as `sequoia_openpgp` is
+    // functioning correctly.
     #[error("{secs} seconds cannot be represented with four octets")]
     TimeOverflow { secs: u64 },
 
