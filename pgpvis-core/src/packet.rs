@@ -82,6 +82,7 @@ macro_rules! gen_packet_enums_and_impls {
 }
 
 gen_packet_enums_and_impls! {
+    Reserved = 0,
     PublicKey = 6,
     UserId = 13,
     PublicSubkey = 14,
@@ -465,15 +466,34 @@ impl UserId {
 }
 
 #[derive(Debug, PartialEq, Eq, Serialize, Tsify)]
+pub struct Reserved;
+
+#[derive(Debug, PartialEq, Eq, Serialize, Tsify)]
 pub struct Private60;
 
 #[cfg(test)]
 mod tests {
-    use wasm_bindgen_test::wasm_bindgen_test;
-
     use super::*;
 
-    #[wasm_bindgen_test]
+    #[test]
+    fn span_transpose() {
+        struct A;
+        #[derive(Debug, PartialEq, Eq)]
+        struct B;
+        impl From<A> for B {
+            fn from(_a: A) -> Self {
+                B
+            }
+        }
+
+        let span_a = Span::new(0, 1, A);
+        let span_b = span_a.transpose();
+
+        let expected = Span::new(0, 1, B);
+        assert_eq!(span_b, expected);
+    }
+
+    #[test]
     fn header_type_id_inferred_from_body() {
         let user_id = UserId {
             user_id: Span {

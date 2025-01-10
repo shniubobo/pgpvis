@@ -1,0 +1,19 @@
+---
+source: pgpvis-core/src/convert.rs
+expression: value
+---
+offset: 0
+length: 2
+inner:
+  format: Legacy
+  ctb:
+    offset: 0
+    length: 1
+    inner:
+      type_id: 0
+  length:
+    offset: 1
+    length: 1
+    inner:
+      encoding: Full
+      length: 0

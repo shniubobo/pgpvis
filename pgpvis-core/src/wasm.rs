@@ -95,11 +95,9 @@ fn parse(options: ParseOptions, message: &[u8]) -> Result<ParseOutput> {
 
 #[cfg(test)]
 mod tests {
-    use wasm_bindgen_test::wasm_bindgen_test;
-
     use super::*;
 
-    #[wasm_bindgen_test]
+    #[test]
     fn single_user_id_openpgp_packet() {
         let options = ParseOptions { dearmor: false };
         let message = b"\xcd\x17John <john@example.com>";
@@ -143,7 +141,7 @@ mod tests {
         assert_eq!(*packet, expected);
     }
 
-    #[wasm_bindgen_test]
+    #[test]
     fn single_user_id_legacy_packet() {
         let options = ParseOptions { dearmor: false };
         let message = b"\xb4\x17John <john@example.com>";
@@ -187,7 +185,7 @@ mod tests {
         assert_eq!(*packet, expected);
     }
 
-    #[wasm_bindgen_test]
+    #[test]
     fn armored_single_user_id_packet() {
         let options = ParseOptions { dearmor: false };
         let message = b"\xb4\x17John <john@example.com>";

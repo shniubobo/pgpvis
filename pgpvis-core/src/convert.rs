@@ -488,3 +488,215 @@ impl Convert<pgp::packet::UserID> for UserId {
         Ok(UserId::new(span))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use pgp::parse::Parse;
+    use serde::Serialize;
+
+    use super::*;
+
+    /// Make an assertion using [`insta::assert_yaml_snapshot!`], saving snapshots
+    /// in `{crate_root}/tests/snapshots`.
+    macro_rules! insta_assert {
+        ($value:ident) => {
+            let crate_root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+            let snapshot_path = crate_root.join("tests/snapshots");
+            insta::with_settings!({snapshot_path => snapshot_path}, {
+                insta::assert_yaml_snapshot!($value);
+            });
+        };
+    }
+
+    /// Generate tests that each asserts
+    /// 1. A given type (1) can be [`Convert`]ed from a certain value (2); and
+    /// 2. The conversion consumes an exact number of fields (3).
+    ///
+    /// To call this macro:
+    /// ```text
+    /// assert_convert! {
+    ///     [function name of test] {
+    ///         [2] => [3] @ [1]
+    ///     }
+    ///
+    ///     [repeat for other tests]
+    /// }
+    /// ```
+    macro_rules! assert_convert {
+        ({ $from:expr => $fields:literal @ $to:ty }) => {
+            // Ensure exact number of fields.
+            let mut context = Context::new();
+            let mut converter = Converter::new(&mut context, vec![1; $fields - 1]);
+            assert!(<$to>::convert_spanned(&$from, &mut converter).is_err());
+
+            let mut context = Context::new();
+            let mut converter = Converter::new(&mut context, vec![1; $fields]);
+            let value = <$to>::convert_spanned(&$from, &mut converter).unwrap();
+            insta_assert!(value);
+        };
+
+        {$( $fn_name:ident $conversion:tt )*} => {
+            $(
+                #[test]
+                fn $fn_name() {
+                    assert_convert!($conversion);
+                }
+            )*
+        };
+    }
+
+    #[derive(Debug, Serialize)]
+    struct DummyPacket;
+    impl PacketType for DummyPacket {
+        const TYPE_ID: TypeId = TypeId::Private60;
+    }
+    impl Convert<()> for DummyPacket {
+        fn convert(_: &(), converter: &mut Converter) -> Result<Self> {
+            converter.next_span()?;
+            Ok(Self)
+        }
+    }
+
+    assert_convert! {
+        // Not testing each variant here. That the correct variant is produced
+        // needs to be checked with eyes (by looking at `AnyPacket`'s impl).
+        any_packet {
+            PacketParser::from_bytes(
+                b"\xb4\x17John <john@example.com>"
+            ).unwrap().unwrap()
+                => 3 @ AnyPacket
+        }
+
+        header_openpgp {
+            pgp::packet::Header::new(
+                pgp::packet::header::CTB::new(pgp::packet::Tag::Private(60)),
+                pgp::packet::header::BodyLength::Full(0),
+            ) => 2 @ Header<Private60>
+        }
+
+        header_legacy {
+            pgp::packet::Header::new(
+                pgp::packet::header::CTB::Old(
+                    pgp::packet::header::CTBOld::new(
+                        pgp::packet::Tag::Reserved,
+                        pgp::packet::header::BodyLength::Full(0),
+                    ).unwrap(),
+                ),
+                pgp::packet::header::BodyLength::Full(0),
+            ) => 2 @ Header<Reserved>
+        }
+
+        openpgp_ctb {
+            pgp::packet::header::CTB::new(pgp::packet::Tag::Private(60))
+                => 1 @ OpenPgpCtb<Private60>
+        }
+
+        legecy_ctb {
+            pgp::packet::header::CTB::Old(
+                pgp::packet::header::CTBOld::new(
+                    pgp::packet::Tag::Reserved,
+                    pgp::packet::header::BodyLength::Full(0),
+                ).unwrap(),
+            ) => 1 @ LegacyCtb<Reserved>
+        }
+
+        openpgp_length_full {
+            pgp::packet::Header::new(
+                pgp::packet::header::CTB::new(pgp::packet::Tag::Private(60)),
+                pgp::packet::header::BodyLength::Full(0),
+            ) => 1 @ OpenPgpLength
+        }
+
+        openpgp_length_partial {
+            pgp::packet::Header::new(
+                pgp::packet::header::CTB::new(pgp::packet::Tag::Private(60)),
+                pgp::packet::header::BodyLength::Partial(0),
+            ) => 1 @ OpenPgpLength
+        }
+
+        legacy_length_full {
+            pgp::packet::Header::new(
+                pgp::packet::header::CTB::Old(
+                    pgp::packet::header::CTBOld::new(
+                        pgp::packet::Tag::Reserved,
+                        pgp::packet::header::BodyLength::Full(0),
+                    ).unwrap(),
+                ),
+                pgp::packet::header::BodyLength::Full(0),
+            ) => 1 @ LegacyLength
+        }
+
+        legacy_length_indeterminate {
+            pgp::packet::Header::new(
+                pgp::packet::header::CTB::Old(
+                    pgp::packet::header::CTBOld::new(
+                        pgp::packet::Tag::Reserved,
+                        pgp::packet::header::BodyLength::Full(0),
+                    ).unwrap(),
+                ),
+                pgp::packet::header::BodyLength::Indeterminate,
+            ) => 1 @ LegacyLength
+        }
+
+        body {
+            () => 1 @ Body<DummyPacket>
+        }
+
+        public_key_version_4_rsa_encrypt_sign {
+            pgp::packet::Key::V4(
+                pgp::packet::key::Key4::<_, pgp::packet::key::PrimaryRole>::new(
+                    SystemTime::UNIX_EPOCH,
+                    pgp::types::PublicKeyAlgorithm::RSAEncryptSign,
+                    pgp::crypto::mpi::PublicKey::RSA {
+                        e: pgp::crypto::mpi::MPI::new(&[4]),
+                        n: pgp::crypto::mpi::MPI::new(&[1, 2, 3]),
+                    },
+                ).unwrap()
+            ) => 7 @ PublicKey
+        }
+
+        // Since the code of subkeys is identical to that of keys, we are not
+        // testing subkeys as thoroughly here.
+        public_subkey {
+            pgp::packet::Key::V4(
+                pgp::packet::key::Key4::<_, pgp::packet::key::SubordinateRole>::new(
+                    SystemTime::UNIX_EPOCH,
+                    pgp::types::PublicKeyAlgorithm::RSAEncryptSign,
+                    pgp::crypto::mpi::PublicKey::RSA {
+                        e: pgp::crypto::mpi::MPI::new(&[4]),
+                        n: pgp::crypto::mpi::MPI::new(&[1, 2, 3]),
+                    },
+                ).unwrap()
+            ) => 7 @ PublicSubkey
+        }
+
+        time {
+            pgp::packet::Key::V4(
+                pgp::packet::key::Key4::<_, pgp::packet::key::PrimaryRole>::new(
+                    SystemTime::UNIX_EPOCH,
+                    pgp::types::PublicKeyAlgorithm::RSAEncryptSign,
+                    pgp::crypto::mpi::PublicKey::RSA {
+                        e: pgp::crypto::mpi::MPI::new(&[4]),
+                        n: pgp::crypto::mpi::MPI::new(&[1, 2, 3]),
+                    },
+                ).unwrap()
+            ) => 1 @ Time
+        }
+
+        rsa_encrypt_sign {
+            pgp::crypto::mpi::PublicKey::RSA {
+                e: pgp::crypto::mpi::MPI::new(&[4]),
+                n: pgp::crypto::mpi::MPI::new(&[1, 2, 3]),
+            } => 4 @ RsaEncryptSign
+        }
+
+        mpi {
+            pgp::crypto::mpi::MPI::new(&[1, 2, 3]) => 2 @ Mpi
+        }
+
+        user_id {
+            pgp::packet::UserID::from_address(Some("John"), None, "john@example.com").unwrap()
+                => 1 @ UserId
+        }
+    }
+}

@@ -9,6 +9,7 @@ use crate::packet::{PublicKeyAlgorithmId, Span};
 pub type Result<T> = StdResult<T, Error>;
 
 #[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
 pub enum Error {
     /// An error has been returned from [`sequoia_openpgp`].
     ///

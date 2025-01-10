@@ -1,0 +1,35 @@
+---
+source: pgpvis-core/src/convert.rs
+expression: value
+---
+offset: 0
+length: 4
+inner:
+  n:
+    offset: 0
+    length: 2
+    inner:
+      length:
+        offset: 0
+        length: 1
+        inner: 17
+      integers:
+        offset: 1
+        length: 1
+        inner:
+          - 1
+          - 2
+          - 3
+  e:
+    offset: 2
+    length: 2
+    inner:
+      length:
+        offset: 2
+        length: 1
+        inner: 3
+      integers:
+        offset: 3
+        length: 1
+        inner:
+          - 4
