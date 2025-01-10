@@ -3,16 +3,17 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "lint": "eslint && prettier --check . && pnpm type-check",
     "dev": "vite",
-    "build": "run-p type-check \"build-only {@}\" --",
     "preview": "vite preview",
+    "dist": "run-p type-check \"build-only {@}\" --",
     "build-only": "vite build",
     "type-check": "vue-tsc --build"
   },
   "packageManager": "pnpm@9.15.3+sha512.1f79bc245a66eb0b07c5d4d83131240774642caaa86ef7d0434ab47c0d16f66b04e21e0c086eb61e62c77efc4d7f7ec071afad3796af64892fae66509173893a",
   "dependencies": {
     "@primevue/themes": "^4.2.5",
-    "pgpvis-core": "link:../pgpvis-core/pkg",
+    "pgpvis-core": "workspace:../pgpvis-core/pkg",
     "primevue": "^4.2.5",
     "vue": "^3.5.13"
   },
