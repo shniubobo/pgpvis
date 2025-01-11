@@ -11,6 +11,11 @@ pub type Result<T> = StdResult<T, Error>;
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum Error {
+    // This should never be created, as long as `sequoia_openpgp` is
+    // functioning correctly.
+    #[error("{bits} bits cannot be represented with two octets")]
+    MpiLengthOverflow { bits: usize },
+
     /// An error has been returned from [`sequoia_openpgp`].
     ///
     /// [`sequoia_openpgp`] currently returns [`anyhow::Error`], which is [bad

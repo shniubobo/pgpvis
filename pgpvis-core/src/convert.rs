@@ -446,7 +446,7 @@ impl TryFrom<SystemTime> for Time {
 
     fn try_from(time: SystemTime) -> StdResult<Self, Self::Error> {
         let since_epoch = time.duration_since(UNIX_EPOCH).unwrap().as_secs();
-        if since_epoch > u32::MAX as u64 {
+        if since_epoch > u32::MAX.into() {
             return Err(Error::TimeOverflow { secs: since_epoch });
         }
         Ok(Self::new(since_epoch as u32))
@@ -473,9 +473,11 @@ impl Convert<pgp::crypto::mpi::PublicKey> for RsaEncryptSign {
 
 impl Convert<pgp::crypto::mpi::MPI> for Mpi {
     fn convert(from: &pgp::crypto::mpi::MPI, converter: &mut Converter) -> Result<Self> {
-        // As per RFC 9580, the length is reprensented by two octets only, so
-        // casting to `u16` is safe.
-        let length_field_span = converter.next_span_with(from.bits() as u16)?;
+        let length_field = from.bits();
+        if length_field > u16::MAX.into() {
+            return Err(Error::MpiLengthOverflow { bits: length_field });
+        }
+        let length_field_span = converter.next_span_with(length_field as u16)?;
         let integers_span = converter.next_span_with(from.value().to_vec())?;
         Ok(Mpi::new(length_field_span, integers_span))
     }
@@ -491,6 +493,8 @@ impl Convert<pgp::packet::UserID> for UserId {
 
 #[cfg(test)]
 mod tests {
+    use std::time::Duration;
+
     use pgp::parse::Parse;
     use serde::Serialize;
 
@@ -698,5 +702,53 @@ mod tests {
             pgp::packet::UserID::from_address(Some("John"), None, "john@example.com").unwrap()
                 => 1 @ UserId
         }
+    }
+
+    #[test]
+    fn time_overflow() {
+        let max = UNIX_EPOCH + Duration::from_secs(u32::MAX.into());
+        let time: Result<Time> = max.try_into();
+        assert!(time.is_ok());
+
+        const OVERFLOW_SECS: u64 = u32::MAX as u64 + 1;
+        let overflow = UNIX_EPOCH + Duration::from_secs(OVERFLOW_SECS);
+        let time: Result<Time> = overflow.try_into();
+        assert!(matches!(
+            time,
+            Err(Error::TimeOverflow {
+                secs: OVERFLOW_SECS
+            })
+        ))
+    }
+
+    #[test]
+    fn mpi_overflow() {
+        const LENGTH_MAX_BITS: u16 = u16::MAX;
+        const LENGTH_MAX_BYTES: usize = (LENGTH_MAX_BITS as usize + 1) / 8;
+        const BYTE_ALL_ONES: u8 = 0xFF;
+
+        let max = {
+            let mut bytes = vec![BYTE_ALL_ONES; LENGTH_MAX_BYTES];
+            // Set the first bit to 0, or the length field will overflow.
+            bytes[0] = 0b0111_1111;
+            pgp::crypto::mpi::MPI::new(bytes.as_slice())
+        };
+        let mut context = Context::new();
+        let mut converter = Converter::new(&mut context, vec![1; 2]);
+        assert!(Mpi::convert(&max, &mut converter).is_ok());
+
+        let overflow = {
+            let bytes = vec![BYTE_ALL_ONES; LENGTH_MAX_BYTES];
+            pgp::crypto::mpi::MPI::new(bytes.as_slice())
+        };
+        let mut context = Context::new();
+        let mut converter = Converter::new(&mut context, vec![1; 2]);
+        const OVERFLOW_BITS: usize = LENGTH_MAX_BITS as usize + 1;
+        assert!(matches!(
+            Mpi::convert(&overflow, &mut converter),
+            Err(Error::MpiLengthOverflow {
+                bits: OVERFLOW_BITS
+            })
+        ));
     }
 }
