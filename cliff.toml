@@ -46,7 +46,12 @@ body = """
 {% endif %}\
 
 {% if message %}\
-    {{ message }}
+    {{
+        message
+            | replace(from="\n\n", to="$NEWLINE")
+            | replace(from="\n", to=" ")
+            | replace(from="$NEWLINE", to="\n\n")
+    }}
 
 {% endif %}\
 
