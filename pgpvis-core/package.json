@@ -3,7 +3,7 @@
   "private": true,
   "scripts": {
     "lint": "RUSTFLAGS=-Dwarnings cargo clippy",
-    "test": "cargo test --target x86_64-unknown-linux-gnu",
+    "test": "cargo test",
     "build": "wasm-pack build --dev",
     "dist": "wasm-pack build"
   },
