@@ -183,6 +183,8 @@ function expand_node(node: TreeNode) {
 </template>
 
 <style lang="postcss">
+@reference "../style.css";
+
 .p-tree-node-content {
   @apply py-0;
 }
