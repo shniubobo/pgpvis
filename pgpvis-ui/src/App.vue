@@ -3,9 +3,9 @@ import { ref } from "vue";
 
 import { type PacketSequence } from "pgpvis-core";
 
-import HexViewTab from "./components/HexViewTab.vue";
-import InputTab from "./components/InputTab.vue";
-import PacketsTab from "./components/PacketsTab.vue";
+import HexViewTab from "./tabs/hex-view/HexViewTab.vue";
+import InputTab from "./tabs/InputTab.vue";
+import PacketsTab from "./tabs/packets/PacketsTab.vue";
 
 const bytes = ref<number[]>([]);
 const packets = ref<PacketSequence>([]);

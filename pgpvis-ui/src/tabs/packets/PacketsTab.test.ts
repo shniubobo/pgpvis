@@ -1,7 +1,7 @@
 import { render } from "@testing-library/vue";
 import { describe, expect, test } from "vitest";
 
-import PacketsTab from "../PacketsTab.vue";
+import PacketsTab from "./PacketsTab.vue";
 
 describe.concurrent.skip("Nodes should match snapshots", () => {
   describe("13: User ID", () => {
