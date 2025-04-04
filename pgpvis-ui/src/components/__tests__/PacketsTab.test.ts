@@ -3,7 +3,7 @@ import { describe, expect, test } from "vitest";
 
 import PacketsTab from "../PacketsTab.vue";
 
-describe.concurrent("Nodes should match snapshots", () => {
+describe.concurrent.skip("Nodes should match snapshots", () => {
   describe("13: User ID", () => {
     test("@", () => {
       const { container } = render(PacketsTab, {

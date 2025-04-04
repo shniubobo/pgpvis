@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { Button, Textarea } from "primevue";
 import { ref } from "vue";
 
 import { parse, type PacketSequence, type ParseOptions } from "pgpvis-core";
@@ -22,7 +21,7 @@ function do_parse() {
 
 <template>
   <div class="flex h-full flex-col p-4">
-    <Textarea v-model="message" class="flex-grow resize-none text-nowrap" />
-    <Button label="Parse" size="large" @click="do_parse" />
+    <textarea v-model="message" class="flex-grow resize-none text-nowrap" />
+    <button @click="do_parse">Parse</button>
   </div>
 </template>

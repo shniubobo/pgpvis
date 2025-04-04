@@ -13,9 +13,7 @@
   },
   "packageManager": "pnpm@9.15.3+sha512.1f79bc245a66eb0b07c5d4d83131240774642caaa86ef7d0434ab47c0d16f66b04e21e0c086eb61e62c77efc4d7f7ec071afad3796af64892fae66509173893a",
   "dependencies": {
-    "@primevue/themes": "^4.2.5",
     "pgpvis-core": "workspace:../pgpvis-core/pkg",
-    "primevue": "^4.2.5",
     "vue": "^3.5.13"
   },
   "devDependencies": {
@@ -34,11 +32,9 @@
     "globals": "^15.14.0",
     "jsdom": "^26.0.0",
     "npm-run-all2": "^7.0.1",
-    "postcss": "^8.4.49",
     "prettier": "3.4.2",
     "prettier-plugin-tailwindcss": "^0.6.9",
     "tailwindcss": "^4.1.2",
-    "tailwindcss-primeui": "^0.3.4",
     "typescript": "~5.6.3",
     "typescript-eslint": "^8.19.1",
     "vite": "^6.0.1",
