@@ -493,7 +493,7 @@ impl Convert<pgp::packet::UserID> for UserId {
 
 #[cfg(test)]
 mod tests {
-    use std::time::Duration;
+    use std::{fmt::Display, time::Duration};
 
     use pgp::parse::Parse;
     use serde::Serialize;
@@ -551,6 +551,11 @@ mod tests {
 
     #[derive(Debug, Serialize)]
     struct DummyPacket;
+    impl Display for DummyPacket {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(f, "DummyPacket")
+        }
+    }
     impl PacketType for DummyPacket {
         const TYPE_ID: TypeId = TypeId::Private60;
     }

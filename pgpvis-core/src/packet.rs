@@ -4,6 +4,9 @@
 //! value should be accessed via a getter method, and the sole reason that the
 //! field exists is to allow [`Serialize`] and [`Tsify`] to be correctly
 //! derived.
+//!
+//! Some types in this module implement [`Display`] to generate each packet's
+//! summary line.
 
 use std::marker::PhantomData;
 use std::result::Result as StdResult;
@@ -14,11 +17,15 @@ use serde_repr::Serialize_repr;
 use tsify_next::Tsify;
 use wasm_bindgen::prelude::wasm_bindgen;
 
+/// Newtype for [`Vec<Span<AnyPacket>>`].
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Tsify)]
+pub struct PacketSequence(pub Vec<Span<AnyPacket>>);
+
 /// Trait implemented by every struct that represents a certain type of packet.
 ///
 /// This is necessary for a Type ID to be inferred during compile-time for each
 /// [`Packet`].
-pub trait PacketType {
+pub trait PacketType: Display {
     const TYPE_ID: TypeId;
 }
 
@@ -43,7 +50,8 @@ macro_rules! gen_type_id_enum {
         #[wasm_bindgen]
         // `Serialize_repr` is derived despite the use of `#[wasm_bindgen]`, so
         // that `Serialize` can be derived on other structs that contain `TypeID`.
-        #[derive(Debug, PartialEq, Eq, Serialize_repr)]
+        #[derive(Clone, Copy, Debug, Display, PartialEq, Eq, Serialize_repr)]
+        #[display("{:02}", *self as u8)]
         #[repr(u8)]
         #[non_exhaustive]
         pub enum TypeId {
@@ -58,12 +66,14 @@ macro_rules! gen_any_packet_enum {
         ///
         /// This is necessary if we need to fit packets into a single data
         /// structure, such as a [`Vec`].
-        #[derive(Debug, PartialEq, Eq, Serialize, Tsify)]
+        #[derive(Clone, Debug, Display, PartialEq, Eq, Serialize, Tsify)]
+        #[display("{}", _0)]
         #[serde(untagged)]
         #[non_exhaustive]
         pub enum AnyPacket {
             $( $packet_type(Packet<$packet_type>), )+
             // TODO: Remove this after we add placeholders for each packet type.
+            #[display("Unknown")]
             Unknown,
         }
     };
@@ -89,13 +99,9 @@ gen_packet_enums_and_impls! {
     Private60 = 60,
 }
 
-/// Newtype for [`Vec<Span<AnyPacket>>`].
-#[derive(Debug, PartialEq, Eq, Serialize, Tsify)]
-pub struct PacketSequence(pub Vec<Span<AnyPacket>>);
-
 /// Information of where a [`Packet`], [`Header`], [`Body`], etc., or a header
 /// or body field, is located inside an OpenPGP message.
-#[derive(Debug, PartialEq, Eq, Serialize, Tsify)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Tsify)]
 pub struct Span<T> {
     pub offset: usize,
     pub length: usize,
@@ -150,7 +156,8 @@ impl<T> std::fmt::Display for Span<T> {
 ///
 /// The type parameter `T` ensures that [`header`](Self::header) and
 /// [`body`](Self::body) are of the same packet type at compile-time.
-#[derive(Debug, PartialEq, Eq, Serialize, Tsify)]
+#[derive(Clone, Copy, Debug, Display, PartialEq, Eq, Serialize, Tsify)]
+#[display("{}", self.body.inner.0)]
 pub struct Packet<T>
 where
     T: PacketType,
@@ -160,7 +167,7 @@ where
 }
 
 /// The first few bytes of a packet which specifies its format and length.
-#[derive(Debug, PartialEq, Eq, Serialize, Tsify)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Tsify)]
 #[serde(tag = "format")]
 pub enum Header<T>
 where
@@ -177,20 +184,26 @@ where
     },
 }
 
+impl<T> Copy for Header<T> where T: PacketType + Clone {}
+
 /// OpenPGP format newtype variant of [`Ctb`].
-#[derive(Debug, PartialEq, Eq, Serialize, Tsify)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Tsify)]
 pub struct OpenPgpCtb<T>(pub Ctb<T>)
 where
     T: PacketType;
 
+impl<T> Copy for OpenPgpCtb<T> where T: PacketType + Clone {}
+
 /// Legacy format newtype variant of [`Ctb`].
-#[derive(Debug, PartialEq, Eq, Serialize, Tsify)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Tsify)]
 pub struct LegacyCtb<T>(pub Ctb<T>)
 where
     T: PacketType;
 
+impl<T> Copy for LegacyCtb<T> where T: PacketType + Clone {}
+
 /// The first byte of each header.
-#[derive(Debug, Default, PartialEq, Eq, Serialize, Tsify)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Tsify)]
 pub struct Ctb<T>
 where
     T: PacketType,
@@ -201,6 +214,8 @@ where
     #[serde(skip)]
     packet_type: PhantomData<T>,
 }
+
+impl<T> Copy for Ctb<T> where T: PacketType + Clone {}
 
 impl<T> Ctb<T>
 where
@@ -227,14 +242,14 @@ where
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Serialize, Tsify)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Tsify)]
 #[serde(tag = "encoding", content = "length")]
 pub enum OpenPgpLength {
     Full(u32),
     Partial(u32),
 }
 
-#[derive(Debug, PartialEq, Eq, Serialize, Tsify)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Tsify)]
 #[serde(tag = "encoding", content = "length")]
 pub enum LegacyLength {
     Full(u32),
@@ -242,7 +257,7 @@ pub enum LegacyLength {
 }
 
 /// A packet, without its [`Header`].
-#[derive(Debug, PartialEq, Eq, Serialize, Tsify)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Tsify)]
 pub struct Body<T: PacketType>(pub T);
 
 impl<T> From<T> for Body<T>
@@ -256,7 +271,8 @@ where
 
 /// Enum for every kind of public keys, each variant being a combination of
 /// a certain version and algorithm.
-#[derive(Debug, PartialEq, Eq, Serialize, Tsify)]
+#[derive(Clone, Debug, Display, PartialEq, Eq, Serialize, Tsify)]
+#[display("{}", _0)]
 #[serde(untagged)]
 #[non_exhaustive]
 pub enum PublicKey {
@@ -266,7 +282,8 @@ pub enum PublicKey {
 
 /// Enum for every kind of public subkeys, each variant being a combination of
 /// a certain version and algorithm.
-#[derive(Debug, PartialEq, Eq, Serialize, Tsify)]
+#[derive(Clone, Debug, Display, PartialEq, Eq, Serialize, Tsify)]
+#[display("{}", _0)]
 #[serde(untagged)]
 #[non_exhaustive]
 pub enum PublicSubkey {
@@ -275,7 +292,14 @@ pub enum PublicSubkey {
 }
 
 /// The public part of a version 4 key or subkey.
-#[derive(Debug, PartialEq, Eq, Serialize, Tsify)]
+#[derive(Clone, Debug, Display, PartialEq, Eq, Serialize, Tsify)]
+#[display(
+    "[{}] Public {} ({}): {}",
+    R::PUBLIC_TYPE_ID,
+    self.role,
+    self.key_material.inner,
+    self.key_id,
+)]
 pub struct PublicVersion4<R, A>
 where
     R: KeyRole,
@@ -301,8 +325,7 @@ where
     ///
     /// This is not directly stored in a packet, but rather calculated by the
     /// implementation from the key. However, it may be useful to store this
-    /// information here instead of requiring the js part of the project to do
-    /// the calculation.
+    /// information here instead of on-the-fly calculation.
     pub key_id: String,
 }
 
@@ -358,20 +381,29 @@ where
 }
 
 /// Marker trait for [`Key`] and [`Subkey`].
-pub trait KeyRole: Default {}
+pub trait KeyRole: Default + Display {
+    /// The Type ID for public key or subkey.
+    const PUBLIC_TYPE_ID: TypeId;
+    // TODO: /// The Type ID for secret key or subkey.
+    // const SECRET_TYPE_ID: u8;
+}
 
 /// Marker struct for primary keys.
-#[derive(Debug, Default, PartialEq, Eq, Serialize)]
+#[derive(Clone, Copy, Debug, Display, Default, PartialEq, Eq, Serialize)]
 pub struct Key;
-impl KeyRole for Key {}
+impl KeyRole for Key {
+    const PUBLIC_TYPE_ID: TypeId = PublicKey::TYPE_ID;
+}
 
 /// Marker struct for subkeys.
-#[derive(Debug, Default, PartialEq, Eq, Serialize)]
+#[derive(Clone, Copy, Debug, Display, Default, PartialEq, Eq, Serialize)]
 pub struct Subkey;
-impl KeyRole for Subkey {}
+impl KeyRole for Subkey {
+    const PUBLIC_TYPE_ID: TypeId = PublicSubkey::TYPE_ID;
+}
 
 /// Trait implemented by every public key algorithm struct.
-pub trait PublicKeyAlgorithm {
+pub trait PublicKeyAlgorithm: Display {
     const ID: PublicKeyAlgorithmId;
 }
 
@@ -393,7 +425,7 @@ macro_rules! gen_public_key_algorithm_id_enum {
         ///
         /// [RFC 9580]: https://datatracker.ietf.org/doc/html/rfc9580#section-9.1
         #[wasm_bindgen]
-        #[derive(Debug, Display, PartialEq, Eq, Serialize_repr)]
+        #[derive(Clone, Copy, Debug, Display, PartialEq, Eq, Serialize_repr)]
         #[repr(u8)]
         #[non_exhaustive]
         pub enum PublicKeyAlgorithmId {
@@ -417,7 +449,8 @@ gen_public_key_algorithm_enums_and_impls! {
     Ed25519 = 27,
 }
 
-#[derive(Debug, PartialEq, Eq, Serialize, Tsify)]
+#[derive(Clone, Debug, Display, PartialEq, Eq, Serialize, Tsify)]
+#[display("RSA (Encrypt or Sign)")]
 pub struct RsaEncryptSign {
     pub n: Span<Mpi>,
     pub e: Span<Mpi>,
@@ -429,10 +462,11 @@ impl RsaEncryptSign {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Serialize, Tsify)]
+#[derive(Clone, Copy, Debug, Display, PartialEq, Eq, Serialize, Tsify)]
+#[display("Ed25519")]
 pub struct Ed25519(Span<[u8; 32]>);
 
-#[derive(Debug, PartialEq, Eq, Serialize, Tsify)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Tsify)]
 pub struct Mpi {
     length: Span<u16>,
     integers: Span<Vec<u8>>,
@@ -445,7 +479,7 @@ impl Mpi {
 }
 
 /// Newtype of [`u32`], representing seconds since the unix epoch.
-#[derive(Debug, PartialEq, Eq, Serialize, Tsify)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Tsify)]
 pub struct Time(pub u32);
 
 impl Time {
@@ -454,7 +488,8 @@ impl Time {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Serialize, Tsify)]
+#[derive(Clone, Debug, Display, PartialEq, Eq, Serialize, Tsify)]
+#[display("[{}] User ID: {}", Self::TYPE_ID, self.user_id.inner)]
 pub struct UserId {
     pub user_id: Span<String>,
 }
@@ -465,15 +500,190 @@ impl UserId {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Serialize, Tsify)]
+#[derive(Clone, Copy, Debug, Display, PartialEq, Eq, Serialize, Tsify)]
+#[display("[{}] Reserved", Self::TYPE_ID)]
 pub struct Reserved;
 
-#[derive(Debug, PartialEq, Eq, Serialize, Tsify)]
+#[derive(Clone, Copy, Debug, Display, PartialEq, Eq, Serialize, Tsify)]
+#[display("[{}] Private", Self::TYPE_ID)]
 pub struct Private60;
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    use paste::paste;
+
+    /// Generate tests that each assert the display string of a type.
+    ///
+    /// To call this macro:
+    ///
+    /// ```text
+    /// assert_display! {
+    ///     [function name of test] {
+    ///         [expression that constructs a type instance]
+    ///     } => [expected display string]
+    ///
+    ///     [repeat for other tests]
+    /// }
+    /// ```
+    ///
+    /// `display_` is prepended to the name of each test.
+    macro_rules! assert_display {
+        {$( $fn_name:ident $from:tt => $expected:literal )*} => {
+            $(
+                paste! {
+                    #[test]
+                    fn [<display_ $fn_name>] () {
+                        let string = $from.to_string();
+                        assert_eq!(string, $expected);
+                    }
+                }
+            )*
+        };
+    }
+
+    macro_rules! dummy_span {
+        ( $inner:expr ) => {
+            Span {
+                offset: 0,
+                length: 0,
+                inner: $inner,
+            }
+        };
+    }
+
+    macro_rules! dummy_mpi {
+        () => {
+            Mpi {
+                length: dummy_span!(0),
+                integers: dummy_span!(vec![]),
+            }
+        };
+    }
+
+    // Only one test is written for each `#[display(...)]` or mannual impl.
+    assert_display! {
+        type_id {
+            TypeId::Reserved
+        } => "00"
+
+        any_packet {
+            AnyPacket::UserId(
+                Packet {
+                    header: dummy_span!(
+                        Header::Legacy {
+                            ctb: dummy_span!(
+                                LegacyCtb(Ctb {
+                                    type_id: (),
+                                    packet_type: PhantomData,
+                                })
+                            ),
+                            length: dummy_span!(LegacyLength::Full(1)),
+                        }
+                    ),
+                    body: dummy_span!(
+                        Body(UserId {
+                            user_id: dummy_span!("a".to_string()),
+                        })
+                    ),
+                }
+            )
+        } => "[13] User ID: a"
+
+        any_packet_unknown {
+            AnyPacket::Unknown
+        } => "Unknown"
+
+        packet {
+            Packet {
+                header: dummy_span!(
+                    Header::Legacy {
+                        ctb: dummy_span!(
+                            LegacyCtb(Ctb {
+                                type_id: (),
+                                packet_type: PhantomData,
+                            })
+                        ),
+                        length: dummy_span!(LegacyLength::Full(1)),
+                    }
+                ),
+                body: dummy_span!(
+                    Body(UserId {
+                        user_id: dummy_span!("a".to_string()),
+                    })
+                ),
+            }
+        } => "[13] User ID: a"
+
+        public_key {
+            PublicKey::Version4Ed25519(
+                PublicVersion4 {
+                    role: Key,
+                    version: dummy_span!(()),
+                    creation_time: dummy_span!(Time(0)),
+                    algorithm: dummy_span!(()),
+                    key_material: dummy_span!(Ed25519(dummy_span!([0; 32]))),
+                    key_id: "DEADBEEFDEADBEEF".to_string(),
+                }
+            )
+        } => "[06] Public Key (Ed25519): DEADBEEFDEADBEEF"
+
+        public_subkey {
+            PublicSubkey::Version4Ed25519(
+                PublicVersion4 {
+                    role: Subkey,
+                    version: dummy_span!(()),
+                    creation_time: dummy_span!(Time(0)),
+                    algorithm: dummy_span!(()),
+                    key_material: dummy_span!(Ed25519(dummy_span!([0; 32]))),
+                    key_id: "DEADBEEFDEADBEEF".to_string(),
+                }
+            )
+        } => "[14] Public Subkey (Ed25519): DEADBEEFDEADBEEF"
+
+        public_version_4 {
+            PublicVersion4 {
+                role: Key,
+                version: dummy_span!(()),
+                creation_time: dummy_span!(Time(0)),
+                algorithm: dummy_span!(()),
+                key_material: dummy_span!(Ed25519(dummy_span!([0; 32]))),
+                key_id: "DEADBEEFDEADBEEF".to_string(),
+            }
+        } => "[06] Public Key (Ed25519): DEADBEEFDEADBEEF"
+
+        key {
+            Key
+        } => "Key"
+
+        subkey {
+            Subkey
+        } => "Subkey"
+
+        rsa_encrypt_sign {
+            RsaEncryptSign {
+                n: dummy_span!(dummy_mpi!()),
+                e: dummy_span!(dummy_mpi!()),
+            }
+        } => "RSA (Encrypt or Sign)"
+
+        ed25519 {
+            Ed25519(dummy_span!([0; 32]))
+        } => "Ed25519"
+
+        user_id {
+            UserId { user_id: dummy_span!("a".to_string()) }
+        } => "[13] User ID: a"
+
+        reserved {
+            Reserved
+        } => "[00] Reserved"
+
+        private_60 {
+            Private60
+        } => "[60] Private"
+    }
 
     #[test]
     fn span_transpose() {
