@@ -1,0 +1,16 @@
+---
+source: pgpvis-core/src/render.rs
+expression: node
+---
+span:
+  offset: 2
+  length: 3
+  inner: ~
+text: Body
+children:
+  - span:
+      offset: 0
+      length: 1
+      inner: ~
+    text: "User ID: a"
+    children: []

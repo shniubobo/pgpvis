@@ -1,0 +1,11 @@
+---
+source: pgpvis-core/src/render.rs
+expression: node
+---
+children:
+  - span:
+      offset: 0
+      length: 1
+      inner: ~
+    text: "[32 octets]"
+    children: []

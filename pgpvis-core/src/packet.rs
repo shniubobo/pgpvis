@@ -203,7 +203,7 @@ where
 impl<T> Copy for LegacyCtb<T> where T: PacketType + Clone {}
 
 /// The first byte of each header.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Tsify)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Tsify)]
 pub struct Ctb<T>
 where
     T: PacketType,
@@ -213,6 +213,19 @@ where
     type_id: (),
     #[serde(skip)]
     packet_type: PhantomData<T>,
+}
+
+// Cannot be derived for all `T: PacketType`.
+impl<T> Default for Ctb<T>
+where
+    T: PacketType,
+{
+    fn default() -> Self {
+        Self {
+            type_id: (),
+            packet_type: PhantomData,
+        }
+    }
 }
 
 impl<T> Copy for Ctb<T> where T: PacketType + Clone {}
@@ -307,17 +320,17 @@ where
 {
     /// Marker field for key role, either [`Key`] or [`Subkey`].
     #[serde(skip)]
-    role: R,
+    pub(crate) role: R,
 
     #[serde(serialize_with = "PublicVersion4::<R, A>::serialize_version")]
     #[tsify(type = "Span<4>")]
-    version: Span<()>,
+    pub(crate) version: Span<()>,
 
     pub creation_time: Span<Time>,
 
     #[serde(serialize_with = "PublicVersion4::<R, A>::serialize_algorithm")]
     #[tsify(type = "Span<PublicKeyAlgorithmId>")]
-    algorithm: Span<()>,
+    pub(crate) algorithm: Span<()>,
 
     pub key_material: Span<A>,
 
@@ -464,12 +477,12 @@ impl RsaEncryptSign {
 
 #[derive(Clone, Copy, Debug, Display, PartialEq, Eq, Serialize, Tsify)]
 #[display("Ed25519")]
-pub struct Ed25519(Span<[u8; 32]>);
+pub struct Ed25519(pub Span<[u8; 32]>);
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Tsify)]
 pub struct Mpi {
-    length: Span<u16>,
-    integers: Span<Vec<u8>>,
+    pub length: Span<u16>,
+    pub integers: Span<Vec<u8>>,
 }
 
 impl Mpi {

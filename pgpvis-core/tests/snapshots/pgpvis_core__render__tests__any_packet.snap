@@ -1,0 +1,46 @@
+---
+source: pgpvis-core/src/render.rs
+expression: node
+---
+span:
+  offset: 10
+  length: 11
+  inner: ~
+text: "[13] User ID: a"
+children:
+  - span:
+      offset: 4
+      length: 5
+      inner: ~
+    text: Header
+    children:
+      - span:
+          offset: 0
+          length: 1
+          inner: ~
+        text: CTB
+        children:
+          - span: ~
+            text: "Format: OpenPGP"
+            children: []
+          - span: ~
+            text: "Type ID: 13"
+            children: []
+      - span:
+          offset: 2
+          length: 3
+          inner: ~
+        text: "Length: 1 (Full)"
+        children: []
+  - span:
+      offset: 8
+      length: 9
+      inner: ~
+    text: Body
+    children:
+      - span:
+          offset: 6
+          length: 7
+          inner: ~
+        text: "User ID: a"
+        children: []

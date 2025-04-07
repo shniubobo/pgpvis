@@ -1,0 +1,11 @@
+---
+source: pgpvis-core/src/render.rs
+assertion_line: 489
+expression: node
+---
+span:
+  offset: 0
+  length: 1
+  inner: ~
+text: Unknown
+children: []

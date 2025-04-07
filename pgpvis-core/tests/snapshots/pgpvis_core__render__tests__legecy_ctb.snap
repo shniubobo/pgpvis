@@ -1,0 +1,16 @@
+---
+source: pgpvis-core/src/render.rs
+expression: node
+---
+span:
+  offset: 0
+  length: 1
+  inner: ~
+text: CTB
+children:
+  - span: ~
+    text: "Format: Legacy"
+    children: []
+  - span: ~
+    text: "Type ID: 13"
+    children: []
