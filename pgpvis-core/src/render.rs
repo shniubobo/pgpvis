@@ -13,7 +13,7 @@ use crate::packet::*;
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct Node {
     /// Span information for the node. [`None`] if not applicable.
-    span: Option<Span<()>>,
+    pub(crate) span: Option<Span<()>>,
 
     /// Text to be displayed for the node.
     #[wasm_bindgen(getter_with_clone, readonly)]

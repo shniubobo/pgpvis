@@ -9,25 +9,26 @@ use sequoia_openpgp::{
         Cookie, Dearmor, PacketParserBuilder, PacketParserResult, Parse,
     },
 };
-use serde::{Deserialize, Serialize};
-use tsify_next::Tsify;
 use wasm_bindgen::prelude::*;
 
 use crate::convert::*;
 use crate::error::*;
 use crate::packet::*;
+use crate::render::Node;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Tsify)]
-#[tsify(from_wasm_abi)]
+#[wasm_bindgen]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ParseOptions {
     pub dearmor: bool,
 }
 
-#[derive(Debug, PartialEq, Eq, Serialize, Tsify)]
-#[tsify(into_wasm_abi)]
+#[wasm_bindgen]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ParseOutput {
+    #[wasm_bindgen(getter_with_clone, readonly)]
     pub bytes: Vec<u8>,
-    pub packet_sequence: PacketSequence,
+    #[wasm_bindgen(getter_with_clone, readonly)]
+    pub nodes: Vec<Node>,
 }
 
 /// Parses a OpenPGP message as defined in [RFC 9580].
@@ -87,10 +88,9 @@ fn parse(options: ParseOptions, message: &[u8]) -> Result<ParseOutput> {
         parser_result = parser.next()?.1
     }
 
-    Ok(ParseOutput {
-        bytes,
-        packet_sequence,
-    })
+    let nodes = Node::render(packet_sequence);
+
+    Ok(ParseOutput { bytes, nodes })
 }
 
 #[cfg(test)]
@@ -101,107 +101,76 @@ mod tests {
     fn single_user_id_openpgp_packet() {
         let options = ParseOptions { dearmor: false };
         let message = b"\xcd\x17John <john@example.com>";
-        let packet_sequence = parse(options, message).unwrap().packet_sequence;
-        let packet = &packet_sequence.0[0];
+        let ParseOutput { bytes, nodes } = parse(options, message).unwrap();
 
-        let expected = Span {
-            offset: 0,
-            length: 25,
-            inner: AnyPacket::UserId(Packet {
-                header: Span {
-                    offset: 0,
-                    length: 2,
-                    inner: Header::OpenPgp {
-                        ctb: Span {
-                            offset: 0,
-                            length: 1,
-                            inner: OpenPgpCtb(Ctb::new()),
+        assert_eq!(bytes, message); // Bytes are unchanged after the round-trip.
+        assert_eq!(nodes.len(), 1);
+
+        let expected_node = Node {
+            span: Some(Span::new(0, 25, ())),
+            text: "[13] User ID: John <john@example.com>".to_string(),
+            children: vec![
+                Node {
+                    span: Some(Span::new(0, 2, ())),
+                    text: "Header".to_string(),
+                    children: vec![
+                        Node {
+                            span: Some(Span::new(0, 1, ())),
+                            text: "CTB".to_string(),
+                            children: vec![
+                                Node {
+                                    span: None,
+                                    text: "Format: OpenPGP".to_string(),
+                                    children: vec![],
+                                },
+                                Node {
+                                    span: None,
+                                    text: "Type ID: 13".to_string(),
+                                    children: vec![],
+                                },
+                            ],
                         },
-                        length: Span {
-                            offset: 1,
-                            length: 1,
-                            inner: OpenPgpLength::Full(23),
+                        Node {
+                            span: Some(Span::new(1, 1, ())),
+                            text: "Length: 23 (Full)".to_string(),
+                            children: vec![],
                         },
-                    },
+                    ],
                 },
-                body: Span {
-                    offset: 2,
-                    length: 23,
-                    inner: Body(UserId {
-                        user_id: Span {
-                            offset: 2,
-                            length: 23,
-                            inner: "John <john@example.com>".to_string(),
-                        },
-                    }),
+                Node {
+                    span: Some(Span::new(2, 23, ())),
+                    text: "Body".to_string(),
+                    children: vec![Node {
+                        span: Some(Span::new(2, 23, ())),
+                        text: "User ID: John <john@example.com>".to_string(),
+                        children: vec![],
+                    }],
                 },
-            }),
+            ],
         };
 
-        assert_eq!(*packet, expected);
-    }
-
-    #[test]
-    fn single_user_id_legacy_packet() {
-        let options = ParseOptions { dearmor: false };
-        let message = b"\xb4\x17John <john@example.com>";
-        let packet_sequence = parse(options, message).unwrap().packet_sequence;
-        let packet = &packet_sequence.0[0];
-
-        let expected = Span {
-            offset: 0,
-            length: 25,
-            inner: AnyPacket::UserId(Packet {
-                header: Span {
-                    offset: 0,
-                    length: 2,
-                    inner: Header::Legacy {
-                        ctb: Span {
-                            offset: 0,
-                            length: 1,
-                            inner: LegacyCtb(Ctb::new()),
-                        },
-                        length: Span {
-                            offset: 1,
-                            length: 1,
-                            inner: LegacyLength::Full(23),
-                        },
-                    },
-                },
-                body: Span {
-                    offset: 2,
-                    length: 23,
-                    inner: Body(UserId {
-                        user_id: Span {
-                            offset: 2,
-                            length: 23,
-                            inner: "John <john@example.com>".to_string(),
-                        },
-                    }),
-                },
-            }),
-        };
-
-        assert_eq!(*packet, expected);
+        assert_eq!(nodes[0], expected_node);
     }
 
     #[test]
     fn armored_single_user_id_packet() {
         let options = ParseOptions { dearmor: false };
         let message = b"\xb4\x17John <john@example.com>";
-        let packet_sequence = parse(options, message).unwrap().packet_sequence;
-        let expected = &packet_sequence.0[0];
+        let ParseOutput {
+            bytes: bytes_exptected,
+            nodes: nodes_expected,
+        } = parse(options, message).unwrap();
 
         let options = ParseOptions { dearmor: true };
         let message = r#"-----BEGIN PGP PUBLIC KEY BLOCK-----
 
 tBdKb2huIDxqb2huQGV4YW1wbGUuY29tPg==
 -----END PGP PUBLIC KEY BLOCK-----
-            "#
+"#
         .as_bytes();
-        let packet_sequence = parse(options, message).unwrap().packet_sequence;
-        let packet = &packet_sequence.0[0];
+        let ParseOutput { bytes, nodes } = parse(options, message).unwrap();
 
-        assert_eq!(packet, expected);
+        assert_eq!(bytes, bytes_exptected);
+        assert_eq!(nodes, nodes_expected);
     }
 }
