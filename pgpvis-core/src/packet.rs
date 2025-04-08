@@ -1,9 +1,15 @@
-//! OpenPGP-related data structures to be passed across the wasm boundary.
+//! OpenPGP-related data structures, as the intermediate representation after
+//! [`convert`](crate::convert)ing and before [`render`](crate::render)ing.
 //!
 //! Some types in this module contains fields of `()`, which means the actual
 //! value should be accessed via a getter method, and the sole reason that the
-//! field exists is to allow [`Serialize`] and [`Tsify`] to be correctly
-//! derived.
+//! field exists is to allow [`Serialize`] to be correctly derived.
+//!
+//! [`Serialize`] is derived on most types in this module. Historically, this
+//! was to make them `Tsify`-derivable and to make them snapshottable by
+//! [`insta`]. However, as the dependency on `tsify` (`tsify-next`, actually)
+//! has been dropped during `pgpvis` v0.2, the latter has become the sole
+//! reason for these [`Serialize`]s to linger on the heads of so many types.
 //!
 //! Some types in this module implement [`Display`] to generate each packet's
 //! summary line.
@@ -14,11 +20,9 @@ use std::result::Result as StdResult;
 use derive_more::with_trait::Display;
 use serde::{Serialize, Serializer};
 use serde_repr::Serialize_repr;
-use tsify_next::Tsify;
-use wasm_bindgen::prelude::wasm_bindgen;
 
 /// Newtype for [`Vec<Span<AnyPacket>>`].
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Tsify)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct PacketSequence(pub Vec<Span<AnyPacket>>);
 
 /// Trait implemented by every struct that represents a certain type of packet.
@@ -46,10 +50,6 @@ macro_rules! gen_type_id_enum {
         /// Every possible Type ID as defined by [RFC 9580].
         ///
         /// [RFC 9580]: https://datatracker.ietf.org/doc/html/rfc9580#name-packet-types
-        // `#[derive(Tsify)]` doesn't support serializing as `u8`.
-        #[wasm_bindgen]
-        // `Serialize_repr` is derived despite the use of `#[wasm_bindgen]`, so
-        // that `Serialize` can be derived on other structs that contain `TypeID`.
         #[derive(Clone, Copy, Debug, Display, PartialEq, Eq, Serialize_repr)]
         #[display("{:02}", *self as u8)]
         #[repr(u8)]
@@ -66,7 +66,7 @@ macro_rules! gen_any_packet_enum {
         ///
         /// This is necessary if we need to fit packets into a single data
         /// structure, such as a [`Vec`].
-        #[derive(Clone, Debug, Display, PartialEq, Eq, Serialize, Tsify)]
+        #[derive(Clone, Debug, Display, PartialEq, Eq, Serialize)]
         #[display("{}", _0)]
         #[serde(untagged)]
         #[non_exhaustive]
@@ -101,7 +101,7 @@ gen_packet_enums_and_impls! {
 
 /// Information of where a [`Packet`], [`Header`], [`Body`], etc., or a header
 /// or body field, is located inside an OpenPGP message.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Tsify)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 pub struct Span<T> {
     pub offset: usize,
     pub length: usize,
@@ -156,7 +156,7 @@ impl<T> Display for Span<T> {
 ///
 /// The type parameter `T` ensures that [`header`](Self::header) and
 /// [`body`](Self::body) are of the same packet type at compile-time.
-#[derive(Clone, Copy, Debug, Display, PartialEq, Eq, Serialize, Tsify)]
+#[derive(Clone, Copy, Debug, Display, PartialEq, Eq, Serialize)]
 #[display("{}", self.body.inner.0)]
 pub struct Packet<T>
 where
@@ -167,7 +167,7 @@ where
 }
 
 /// The first few bytes of a packet which specifies its format and length.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Tsify)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(tag = "format")]
 pub enum Header<T>
 where
@@ -187,7 +187,7 @@ where
 impl<T> Copy for Header<T> where T: PacketType + Clone {}
 
 /// OpenPGP format newtype variant of [`Ctb`].
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Tsify)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct OpenPgpCtb<T>(pub Ctb<T>)
 where
     T: PacketType;
@@ -195,7 +195,7 @@ where
 impl<T> Copy for OpenPgpCtb<T> where T: PacketType + Clone {}
 
 /// Legacy format newtype variant of [`Ctb`].
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Tsify)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct LegacyCtb<T>(pub Ctb<T>)
 where
     T: PacketType;
@@ -203,13 +203,12 @@ where
 impl<T> Copy for LegacyCtb<T> where T: PacketType + Clone {}
 
 /// The first byte of each header.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Tsify)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct Ctb<T>
 where
     T: PacketType,
 {
     #[serde(serialize_with = "Ctb::<T>::serialize_type_id")]
-    #[tsify(type = "TypeId")]
     type_id: (),
     #[serde(skip)]
     packet_type: PhantomData<T>,
@@ -255,14 +254,14 @@ where
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Tsify)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(tag = "encoding", content = "length")]
 pub enum OpenPgpLength {
     Full(u32),
     Partial(u32),
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Tsify)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(tag = "encoding", content = "length")]
 pub enum LegacyLength {
     Full(u32),
@@ -270,7 +269,7 @@ pub enum LegacyLength {
 }
 
 /// A packet, without its [`Header`].
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Tsify)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 pub struct Body<T: PacketType>(pub T);
 
 impl<T> From<T> for Body<T>
@@ -284,7 +283,7 @@ where
 
 /// Enum for every kind of public keys, each variant being a combination of
 /// a certain version and algorithm.
-#[derive(Clone, Debug, Display, PartialEq, Eq, Serialize, Tsify)]
+#[derive(Clone, Debug, Display, PartialEq, Eq, Serialize)]
 #[display("{}", _0)]
 #[serde(untagged)]
 #[non_exhaustive]
@@ -295,7 +294,7 @@ pub enum PublicKey {
 
 /// Enum for every kind of public subkeys, each variant being a combination of
 /// a certain version and algorithm.
-#[derive(Clone, Debug, Display, PartialEq, Eq, Serialize, Tsify)]
+#[derive(Clone, Debug, Display, PartialEq, Eq, Serialize)]
 #[display("{}", _0)]
 #[serde(untagged)]
 #[non_exhaustive]
@@ -305,7 +304,7 @@ pub enum PublicSubkey {
 }
 
 /// The public part of a version 4 key or subkey.
-#[derive(Clone, Debug, Display, PartialEq, Eq, Serialize, Tsify)]
+#[derive(Clone, Debug, Display, PartialEq, Eq, Serialize)]
 #[display(
     "[{}] Public {} ({}): {}",
     R::PUBLIC_TYPE_ID,
@@ -323,13 +322,11 @@ where
     pub(crate) role: R,
 
     #[serde(serialize_with = "PublicVersion4::<R, A>::serialize_version")]
-    #[tsify(type = "Span<4>")]
     pub(crate) version: Span<()>,
 
     pub creation_time: Span<Time>,
 
     #[serde(serialize_with = "PublicVersion4::<R, A>::serialize_algorithm")]
-    #[tsify(type = "Span<PublicKeyAlgorithmId>")]
     pub(crate) algorithm: Span<()>,
 
     pub key_material: Span<A>,
@@ -437,7 +434,6 @@ macro_rules! gen_public_key_algorithm_id_enum {
         /// Every possible ID of public key algorithms as defined by [RFC 9580].
         ///
         /// [RFC 9580]: https://datatracker.ietf.org/doc/html/rfc9580#section-9.1
-        #[wasm_bindgen]
         #[derive(Clone, Copy, Debug, Display, PartialEq, Eq, Serialize_repr)]
         #[repr(u8)]
         #[non_exhaustive]
@@ -462,7 +458,7 @@ gen_public_key_algorithm_enums_and_impls! {
     Ed25519 = 27,
 }
 
-#[derive(Clone, Debug, Display, PartialEq, Eq, Serialize, Tsify)]
+#[derive(Clone, Debug, Display, PartialEq, Eq, Serialize)]
 #[display("RSA (Encrypt or Sign)")]
 pub struct RsaEncryptSign {
     pub n: Span<Mpi>,
@@ -475,11 +471,11 @@ impl RsaEncryptSign {
     }
 }
 
-#[derive(Clone, Copy, Debug, Display, PartialEq, Eq, Serialize, Tsify)]
+#[derive(Clone, Copy, Debug, Display, PartialEq, Eq, Serialize)]
 #[display("Ed25519")]
 pub struct Ed25519(pub Span<[u8; 32]>);
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Tsify)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct Mpi {
     pub length: Span<u16>,
     pub integers: Span<Vec<u8>>,
@@ -492,7 +488,7 @@ impl Mpi {
 }
 
 /// Newtype of [`u32`], representing seconds since the unix epoch.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Tsify)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 pub struct Time(pub u32);
 
 impl Time {
@@ -501,7 +497,7 @@ impl Time {
     }
 }
 
-#[derive(Clone, Debug, Display, PartialEq, Eq, Serialize, Tsify)]
+#[derive(Clone, Debug, Display, PartialEq, Eq, Serialize)]
 #[display("[{}] User ID: {}", Self::TYPE_ID, self.user_id.inner)]
 pub struct UserId {
     pub user_id: Span<String>,
@@ -513,11 +509,11 @@ impl UserId {
     }
 }
 
-#[derive(Clone, Copy, Debug, Display, PartialEq, Eq, Serialize, Tsify)]
+#[derive(Clone, Copy, Debug, Display, PartialEq, Eq, Serialize)]
 #[display("[{}] Reserved", Self::TYPE_ID)]
 pub struct Reserved;
 
-#[derive(Clone, Copy, Debug, Display, PartialEq, Eq, Serialize, Tsify)]
+#[derive(Clone, Copy, Debug, Display, PartialEq, Eq, Serialize)]
 #[display("[{}] Private", Self::TYPE_ID)]
 pub struct Private60;
 

@@ -4,9 +4,6 @@ members = [
     "pgpvis-core",
 ]
 
-[patch.crates-io]
-tsify-next = { git = "https://github.com/shniubobo/tsify.git", branch = "issue/49"}
-
 [profile.release]
 lto = true
 opt-level = "s"
