@@ -3,6 +3,7 @@
 use std::result::Result as StdResult;
 
 use sequoia_openpgp as pgp;
+use sequoia_openpgp::anyhow::Error as PgpError;
 
 use crate::packet::{PublicKeyAlgorithmId, Span};
 
@@ -18,14 +19,20 @@ pub enum Error {
 
     /// An error has been returned from [`sequoia_openpgp`].
     ///
-    /// [`sequoia_openpgp`] currently returns [`anyhow::Error`], which is [bad
+    /// [`sequoia_openpgp`] currently returns `anyhow::Error`, which is [bad
     /// practice and planned to be changed]. As a result, we have to also
-    /// depend on [`anyhow::Error`].
+    /// depend on `anyhow::Error`.
+    ///
+    /// Update: [`sequoia_openpgp`] since v2.0.0 re-exports `anyhow::Error` as
+    /// [`sequoia_openpgp::anyhow::Error`], so we are saved from depending
+    /// *directly* on `anyhow`. However, dependency on `anyhow` is still
+    /// necessary until we see [`sequoia_openpgp`] reach v3. See also the
+    /// linked issue.
     ///
     /// [bad practice and planned to be changed]:
     ///     https://gitlab.com/sequoia-pgp/sequoia/-/issues/1020
     #[error("failed to parse packet")]
-    Parse(#[from] anyhow::Error),
+    Parse(#[from] PgpError),
 
     #[error("failed to read message")]
     Read(#[from] std::io::Error),

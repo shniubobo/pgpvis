@@ -7,11 +7,10 @@ publish = false
 crate-type = ["cdylib"]
 
 [dependencies]
-anyhow = "1.0.97" # Dependency of `sequoia-openpgp`
 chrono = { version = "0.4.40", default-features = false, features = ["std"] }
-derive_more = { version = "1.0.0", features = ["display"] }
+derive_more = { version = "2.0.1", features = ["display"] }
 paste = "1.0.15"
-sequoia-openpgp = { version = "1.22.0", default-features = false, features = ["crypto-rust", "allow-experimental-crypto", "allow-variable-time-crypto"] }
+sequoia-openpgp = { version = "2.0.0", default-features = false, features = ["crypto-rust", "allow-experimental-crypto", "allow-variable-time-crypto"] }
 serde = { version = "1.0.219", features = ["derive"] }
 serde_repr = "0.1.20"
 thiserror = "2.0.12"

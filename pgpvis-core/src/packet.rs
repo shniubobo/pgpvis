@@ -11,7 +11,7 @@
 use std::marker::PhantomData;
 use std::result::Result as StdResult;
 
-use derive_more::Display;
+use derive_more::with_trait::Display;
 use serde::{Serialize, Serializer};
 use serde_repr::Serialize_repr;
 use tsify_next::Tsify;
@@ -146,7 +146,7 @@ impl<T> Span<T> {
 // removed in the future.
 //
 // TODO: Remove this when it's no longer needed.
-impl<T> std::fmt::Display for Span<T> {
+impl<T> Display for Span<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}:{}", self.offset, self.length)
     }
