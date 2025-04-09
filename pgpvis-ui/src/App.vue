@@ -1,23 +1,23 @@
 <script setup lang="ts">
 import { ref } from "vue";
 
-import { type PacketSequence } from "pgpvis-core";
+import { Node } from "pgpvis-core";
 
 import HexViewTab from "./tabs/hex-view/HexViewTab.vue";
 import InputTab from "./tabs/InputTab.vue";
 import PacketsTab from "./tabs/packets/PacketsTab.vue";
 
-const bytes = ref<number[]>([]);
-const packets = ref<PacketSequence>([]);
+const bytes = ref<Uint8Array>(new Uint8Array());
+const nodes = ref<Node[]>([]);
 </script>
 
 <template>
   <div class="grid grid-cols-3">
     <InputTab
-      @update-bytes="(new_bytes) => (bytes = new_bytes)"
-      @update-packets="(new_packets) => (packets = new_packets)"
+      @update-hex-view="(new_bytes) => (bytes = new_bytes)"
+      @update-packets="(new_nodes) => (nodes = new_nodes)"
     />
     <HexViewTab :bytes="bytes" />
-    <PacketsTab :packets="packets" />
+    <PacketsTab :nodes="nodes" />
   </div>
 </template>

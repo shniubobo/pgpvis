@@ -1,21 +1,22 @@
 <script setup lang="ts">
 import { ref } from "vue";
 
-import { parse, type PacketSequence, type ParseOptions } from "pgpvis-core";
+import { Node, parse, ParseOptions } from "pgpvis-core";
 
 const message = ref("");
 
 const emit = defineEmits<{
-  "update-bytes": [bytes: number[]];
-  "update-packets": [packets: PacketSequence];
+  "update-hex-view": [bytes: Uint8Array];
+  "update-packets": [nodes: Node[]];
 }>();
 
 function do_parse() {
-  const encoded = new TextEncoder().encode(message.value);
-  const parse_options: ParseOptions = { dearmor: true };
-  const parse_output = parse(parse_options, encoded);
-  emit("update-bytes", parse_output.bytes);
-  emit("update-packets", parse_output.packet_sequence);
+  const encoded_message = new TextEncoder().encode(message.value);
+  // TODO: Allow users to choose whether to dearmor or not.
+  const parse_options = new ParseOptions(true);
+  const parse_output = parse(parse_options, encoded_message);
+  emit("update-hex-view", parse_output.bytes);
+  emit("update-packets", parse_output.nodes);
 }
 </script>
 
