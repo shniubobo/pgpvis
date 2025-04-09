@@ -23,6 +23,14 @@ pub struct ParseOptions {
 }
 
 #[wasm_bindgen]
+impl ParseOptions {
+    #[wasm_bindgen(constructor)]
+    pub fn new(dearmor: bool) -> Self {
+        Self { dearmor }
+    }
+}
+
+#[wasm_bindgen]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ParseOutput {
     #[wasm_bindgen(getter_with_clone, readonly)]
