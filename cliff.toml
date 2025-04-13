@@ -16,52 +16,51 @@ header = """
 # template for the changelog body
 # https://keats.github.io/tera/docs/#introduction
 body = """
-{% macro group(group, commits) %}\
+{%- macro group(group, commits) -%}
     ### {{ group | striptags | trim | upper_first }}
 
-    {% for commit in commits %}\
-        - {% if commit.scope %}**{{ commit.scope }}** {% endif %}\
-            {% if commit.breaking %}**BREAKING** {% endif %}\
-            {{ commit.message | upper_first }} (\
-                {% if commit.raw_message is matching("(?im)^Summary-of:") %}\
-                    {% set_global summarized_commit_ids = [] %}\
-                    {% for id in commit.footers
+    {% for commit in commits -%}
+        - {% if commit.scope %}**{{ commit.scope }}** {% endif -%}
+            {%- if commit.breaking %}**BREAKING** {% endif -%}
+            {{- commit.message | upper_first }} (
+                {%- if commit.raw_message is matching("(?im)^Summary-of:") -%}
+                    {%- set_global summarized_commit_ids = [] -%}
+                    {%- for id in commit.footers
                         | filter(attribute="token", value="Summary-of")
                         | map(attribute="value")
-                    %}\
-                        {% set_global summarized_commit_ids =
-                            summarized_commit_ids | concat(with=self::commit(id=id)) %}\
-                    {% endfor %}\
-                    {{ summarized_commit_ids | join(sep=", ") }}\
-                {% else %}\
-                    {{ self::commit(id=commit.id) }} \
-                    by {{ commit.author.name }}\
-                {% endif %}\
+                    -%}
+                        {%- set_global summarized_commit_ids =
+                            summarized_commit_ids | concat(with=self::commit(id=id)) -%}
+                    {%- endfor -%}
+                    {{- summarized_commit_ids | join(sep=", ") -}}
+                {%- else -%}
+                    {{- self::commit(id=commit.id) }} by {{ commit.author.name -}}
+                {%- endif -%}
             )
     {% endfor %}
-{% endmacro group %}\
+{% endmacro group -%}
 
-{% macro commit(id) %}\
-    [`{{ id | truncate(length=7, end="") }}`]($REPO/commit/{{ id }})\
-{% endmacro commit %}\
+{%- macro commit(id) -%}
+    [`{{ id | truncate(length=7, end="") }}`]($REPO/commit/{{ id }})
+{%- endmacro commit -%}
 
-{% if version %}\
-    ## {{ version | trim_start_matches(pat="v") }} - {{ timestamp | date(format="%Y-%m-%d") }}\
-{% else %}\
-    ## Unreleased\
-{% endif %}
+{%- if version -%}
+    ## {{ version | trim_start_matches(pat="v") }} - {{ timestamp | date(format="%Y-%m-%d") -}}
+{%- else -%}
+    ## Unreleased
+{%- endif %}
 
-{% if previous %}\
-    {% if previous.commit_id and commit_id %}\
-        Commits since last release: [\
-            {{ previous.commit_id | truncate(length=7, end="") }}\
-            ...{{ commit_id | truncate(length=7, end="") }}\
+{% if previous -%}
+    {%- if previous.commit_id and commit_id -%}
+        Commits since last release: [
+            {{- previous.commit_id | truncate(length=7, end="") -}}
+            ...{{ commit_id | truncate(length=7, end="") -}}
         ]($REPO/compare/{{ previous.commit_id }}...{{ commit_id }})
 
-    {% endif %}\
-{% endif %}\
+    {% endif -%}
+{%- endif -%}
 
-{% if message %}\
+{%- if message -%}
     {{
         message
             | replace(from="\n\n", to="$NEWLINE")
@@ -69,21 +68,21 @@ body = """
             | replace(from="$NEWLINE", to="\n\n")
     }}
 
-{% endif %}\
+{% endif -%}
 
-{% for group, commits in commits | group_by(attribute="group") %}\
-    {% if group is not containing("<!-- detail -->") %}\
-        {{ self::group(group=group, commits=commits) }}\
-    {% endif %}\
-{% endfor %}\
+{%- for group, commits in commits | group_by(attribute="group") -%}
+    {%- if group is not containing("<!-- detail -->") -%}
+        {{- self::group(group=group, commits=commits) -}}
+    {%- endif -%}
+{%- endfor -%}
 <details>
     <summary>More</summary>
 
-    {% for group, commits in commits | group_by(attribute="group") %}\
-        {% if group is containing("<!-- detail -->") %}\
-            {{ self::group(group=group, commits=commits) }}\
-        {% endif %}\
-    {% endfor %}\
+    {% for group, commits in commits | group_by(attribute="group") -%}
+        {%- if group is containing("<!-- detail -->") -%}
+            {{- self::group(group=group, commits=commits) -}}
+        {%- endif -%}
+    {%- endfor -%}
 </details>
 
 
