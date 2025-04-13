@@ -21,7 +21,7 @@ body = """
 
     {% for commit in commits %}\
         - {% if commit.scope %}**{{ commit.scope }}** {% endif %}\
-            {% if commit.breaking %}[**breaking**] {% endif %}\
+            {% if commit.breaking %}**BREAKING** {% endif %}\
             {{ commit.message | upper_first }} (\
                 [`{{ commit.id | truncate(length=7, end="") }}`]($REPO/commit/{{ commit.id }}) \
                 by {{ commit.author.name }}\
