@@ -100,25 +100,24 @@ filter_unconventional = true
 split_commits = false
 # regex for preprocessing the commit messages
 commit_preprocessors = [
-    { pattern = '^✨(\(.*\))?(!)? ', replace = "feat$1$2: " },
-    { pattern = '^🐛(\(.*\))?(!)? ', replace = "fix$1$2: " },
-    { pattern = '^🔧(\(.*\))?(!)? ', replace = "change$1$2: " },
-    { pattern = '^🧹(\(.*\))?(!)? ', replace = "chore$1$2: " },
-    # Hide `feat` or `fix` in `<details>`
-    { pattern = "(?ms)^(feat|fix)(.*(?i)^changelog: ?detail$(?-i).*)", replace = "$1-$2" },
+    # Add a colon to make it conventional-commit-compatible
+    { pattern = '^((?:✨|🐛|🔧|🧹)(?:\(.*\))?!?)', replace = "$1:" },
+    # Preprocess `Changelog: detail`
+    { pattern = "(?ms)^(✨|🐛|🔧)(.*(?i)^changelog: ?detail$(?-i).*)", replace = "$1-$2" },
 ]
 # regex for parsing and grouping commits
 commit_parsers = [
     { footer = "(?i)^changelog: ?(?:ignore|skip)$", skip = true },
 
     # Hidden in `<details>`
-    { message = "^feat-", group = "<!-- 2 --><!-- detail -->✨ Added" },
-    { message = "^fix-", group = "<!-- 3 --><!-- detail -->🐛 Fixed" },
-    { message = "^change", group = "<!-- 4 --><!-- detail -->🔧 Changed" },
-    { message = "^chore", group = "<!-- 5 --><!-- detail -->🧹 Misc" },
+    { message = "^✨-", group = "<!-- 3 --><!-- detail -->✨ Added" },
+    { message = "^🐛-", group = "<!-- 4 --><!-- detail -->🐛 Fixed" },
+    { message = "^🔧-", group = "<!-- 5 --><!-- detail -->🔧 Changed" },
+    { message = "^🧹", group = "<!-- 6 --><!-- detail -->🧹 Misc" },
 
-    { message = "^feat", group = "<!-- 0 -->✨ Added" },
-    { message = "^fix", group = "<!-- 1 -->🐛 Fixed" },
+    { message = "^✨", group = "<!-- 0 -->✨ Added" },
+    { message = "^🐛", group = "<!-- 1 -->🐛 Fixed" },
+    { message = "^🔧", group = "<!-- 2 -->🔧 Changed" },
 ]
 # filter out the commits that are not matched by commit parsers
 filter_commits = false
