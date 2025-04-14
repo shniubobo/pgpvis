@@ -23,8 +23,11 @@ body = """
         - {% if commit.scope %}**{{ commit.scope }}** {% endif -%}
             {%- if commit.breaking %}**BREAKING** {% endif -%}
             {{- commit.message | upper_first }} (
+                {{- self::commit(id=commit.id) }} by {{ commit.author.name -}}
+
                 {%- if commit.raw_message is matching("(?im)^Summary-of:") -%}
                     {%- set_global summarized_commit_ids = [] -%}
+                    {#- TODO: Make the `filter` case-insensitive -#}
                     {%- for id in commit.footers
                         | filter(attribute="token", value="Summary-of")
                         | map(attribute="value")
@@ -32,9 +35,8 @@ body = """
                         {%- set_global summarized_commit_ids =
                             summarized_commit_ids | concat(with=self::commit(id=id)) -%}
                     {%- endfor -%}
-                    {{- summarized_commit_ids | join(sep=", ") -}}
-                {%- else -%}
-                    {{- self::commit(id=commit.id) }} by {{ commit.author.name -}}
+
+                    : {{ summarized_commit_ids | join(sep=", ") -}}
                 {%- endif -%}
             )
     {% endfor %}
