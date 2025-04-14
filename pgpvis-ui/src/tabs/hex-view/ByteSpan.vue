@@ -7,5 +7,9 @@ const props = defineProps<{
 </script>
 
 <template>
-  <span class="px-[0.5ch]">{{ props.byte.toString(16).padStart(2, "0") }}</span>
+  <span
+    class="px-[0.5ch] select-none"
+    :class="{ 'bg-sky-200': props.selected }"
+    >{{ props.byte.toString(16).padStart(2, "0") }}</span
+  >
 </template>

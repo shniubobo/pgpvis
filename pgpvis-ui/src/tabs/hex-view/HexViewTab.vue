@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useVirtualizer } from "@tanstack/vue-virtual";
+import { useEventBus } from "@vueuse/core";
 import { computed, ref, useTemplateRef } from "vue";
 
 import type { Line } from "./BytesLine.vue";
@@ -72,6 +73,24 @@ const virtual_lines = computed(() =>
 //
 // TODO: Come up with a minimal reproducible example, file a bug report and
 // leave a link here to that issue.
+
+const bus = useEventBus<{ offset: number; length: number }>("span-selected");
+bus.on(({ offset, length }) => {
+  selected_byte_offsets.value = Array(length)
+    .fill(offset)
+    .map((offset, idx) => offset + idx);
+
+  virtual_hex_view.value.value.scrollToIndex(
+    get_center_line_index(offset, length),
+    { align: "center" },
+  );
+});
+
+function get_center_line_index(offset: number, length: number) {
+  const center_offset = offset + length / 2;
+  const center_line = Math.floor(center_offset / LINE_LENGTH);
+  return center_line;
+}
 </script>
 
 <template>
