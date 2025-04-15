@@ -112,7 +112,7 @@ function get_center_line_index(offset: number, length: number) {
       class="relative w-full"
       :style="{ height: `${virtual_hex_view.value.getTotalSize()}px` }"
     >
-      <div
+      <BytesLine
         v-for="virtual_line in virtual_lines"
         :key="virtual_line.index"
         class="absolute top-0 left-0 w-full"
@@ -120,12 +120,9 @@ function get_center_line_index(offset: number, length: number) {
           height: `${virtual_line.size}px`,
           transform: `translateY(${virtual_line.start}px)`,
         }"
-      >
-        <BytesLine
-          :bytes="lines[virtual_line.index]"
-          :offset="virtual_line.index * LINE_LENGTH"
-        />
-      </div>
+        :bytes="lines[virtual_line.index]"
+        :offset="virtual_line.index * LINE_LENGTH"
+      />
     </div>
   </div>
 </template>

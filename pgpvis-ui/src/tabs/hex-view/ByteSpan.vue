@@ -11,7 +11,9 @@ const selected = computed(() => selected_bytes.value[props.offset]);
 </script>
 
 <template>
-  <span class="px-[0.5ch] select-none" :class="{ 'bg-sky-200': selected }">{{
-    props.byte.toString(16).padStart(2, "0")
-  }}</span>
+  <span
+    class="inline-block px-[0.5ch] select-none"
+    :class="{ 'bg-sky-200': selected }"
+    >{{ props.byte.toString(16).padStart(2, "0") }}</span
+  >
 </template>
