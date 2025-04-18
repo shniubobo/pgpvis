@@ -1,57 +1,37 @@
-import { render } from "@testing-library/vue";
-import { describe, expect, test } from "vitest";
+import { mount, shallowMount } from "@vue/test-utils";
 
+import { Node as MockedNode } from "@mocks/pgpvis-core";
+import NodeTree from "./NodeTree.vue";
 import PacketsTab from "./PacketsTab.vue";
 
-describe.concurrent.skip("Nodes should match snapshots", () => {
-  describe("13: User ID", () => {
-    test("@", () => {
-      const { container } = render(PacketsTab, {
-        props: {
-          packets: [
-            {
-              offset: 0,
-              length: 25,
-              inner: {
-                header: {
-                  offset: 0,
-                  length: 2,
-                  inner: {
-                    format: "OpenPGP",
-                    ctb: {
-                      offset: 0,
-                      length: 1,
-                      inner: {
-                        type_id: 13,
-                      },
-                    },
-                    length: {
-                      offset: 1,
-                      length: 1,
-                      inner: {
-                        encoding: "Full",
-                        length: 23,
-                      },
-                    },
-                  },
-                },
-                body: {
-                  offset: 2,
-                  length: 23,
-                  inner: {
-                    user_id: {
-                      offset: 2,
-                      length: 23,
-                      inner: "John <john@example.com>",
-                    },
-                  },
-                },
-              },
-            },
-          ],
-        },
-      });
-      expect(container).toMatchSnapshot();
-    });
+test("no nodes", () => {
+  const tab = shallowMount(PacketsTab, { props: { nodes: [] } });
+
+  expect(tab.findAllComponents(NodeTree)).toHaveLength(0);
+});
+
+test("one node", () => {
+  const tab = shallowMount(PacketsTab, {
+    props: { nodes: [new MockedNode("node 0")] },
   });
+
+  expect(tab.findAllComponents(NodeTree)).toHaveLength(1);
+});
+
+test("three nodes", () => {
+  const tab = mount(PacketsTab, {
+    props: {
+      nodes: [
+        new MockedNode("node 0"),
+        new MockedNode("node 1"),
+        new MockedNode("node 2"),
+      ],
+    },
+  });
+
+  expect(tab.findAllComponents(NodeTree)).toHaveLength(3);
+  // Assert correct order
+  expect(tab.findAllComponents(NodeTree).at(0)!.text()).toBe("node 0");
+  expect(tab.findAllComponents(NodeTree).at(1)!.text()).toBe("node 1");
+  expect(tab.findAllComponents(NodeTree).at(2)!.text()).toBe("node 2");
 });
