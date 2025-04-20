@@ -45,13 +45,15 @@ describe("byte hex", () => {
 });
 
 describe("highlighting", () => {
+  const HIGHLIGHTING_CLASS = "bg-blue-300/60";
+
   test("highlighted when in `selected-bytes`", () => {
     const component = mount(ByteSpan, {
       props: { byte: 0, offset: 1 },
       global: { provide: { "selected-bytes": ref([false, true, false]) } },
     });
 
-    expect(component.get("span").classes()).toContain("bg-sky-200");
+    expect(component.get("span").classes()).toContain(HIGHLIGHTING_CLASS);
   });
 
   test("not highlighted when not in `selected-bytes`", () => {
@@ -60,7 +62,7 @@ describe("highlighting", () => {
       global: { provide: { "selected-bytes": ref([true, false, true]) } },
     });
 
-    expect(component.get("span").classes()).not.toContain("bg-sky-200");
+    expect(component.get("span").classes()).not.toContain(HIGHLIGHTING_CLASS);
   });
 
   test("not highlighted for out-of-bounds access of `selected-bytes`", () => {
@@ -69,7 +71,7 @@ describe("highlighting", () => {
       global: { provide: { "selected-bytes": ref([]) } },
     });
 
-    expect(component.get("span").classes()).not.toContain("bg-sky-200");
+    expect(component.get("span").classes()).not.toContain(HIGHLIGHTING_CLASS);
   });
 
   describe("updating `selected-bytes`", () => {
@@ -83,7 +85,7 @@ describe("highlighting", () => {
       selected_bytes.value[1] = false;
       await component.vm.$nextTick();
 
-      expect(component.get("span").classes()).not.toContain("bg-sky-200");
+      expect(component.get("span").classes()).not.toContain(HIGHLIGHTING_CLASS);
     });
 
     test("from not selected to selected", async () => {
@@ -96,7 +98,7 @@ describe("highlighting", () => {
       selected_bytes.value[1] = true;
       await component.vm.$nextTick();
 
-      expect(component.get("span").classes()).toContain("bg-sky-200");
+      expect(component.get("span").classes()).toContain(HIGHLIGHTING_CLASS);
     });
   });
 });
