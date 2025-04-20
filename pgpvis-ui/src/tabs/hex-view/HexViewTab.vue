@@ -1,7 +1,14 @@
 <script setup lang="ts">
 import { useVirtualizer } from "@tanstack/vue-virtual";
 import { useEventBus } from "@vueuse/core";
-import { computed, provide, ref, useTemplateRef, watch } from "vue";
+import {
+  computed,
+  effectScope,
+  provide,
+  ref,
+  useTemplateRef,
+  watch,
+} from "vue";
 
 import BytesLine from "./BytesLine.vue";
 
@@ -53,13 +60,17 @@ const hex_view = useTemplateRef("hex-view");
 // See:
 // - https://github.com/TanStack/virtual/issues/363
 // - https://github.com/TanStack/virtual/issues/969
-const virtual_hex_view = computed(() =>
-  useVirtualizer({
-    count: lines.value.length,
-    getScrollElement: () => hex_view.value,
-    estimateSize: () => 24, // TODO: Do not hard-code this.
-  }),
-);
+const virtual_hex_view = computed(() => {
+  // `useVirtualizer` calls `onScopeDispose` without setting `failSilently`, so
+  // we have to run this inside an `effectScope` to suppress the warning.
+  return effectScope().run(() => {
+    return useVirtualizer({
+      count: lines.value.length,
+      getScrollElement: () => hex_view.value,
+      estimateSize: () => 24, // TODO: Do not hard-code this.
+    });
+  })!; // Impossible to be undefined since we never call `stop`.
+});
 const virtual_lines = computed(() =>
   virtual_hex_view.value.value.getVirtualItems(),
 );
