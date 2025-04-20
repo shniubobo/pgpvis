@@ -14,7 +14,40 @@ const bus = useEventBus<{ offset: number; length: number }>("span-selected");
 
 const selected = ref(false);
 bus.on(() => (selected.value = false));
-watch(props, () => (selected.value = false));
+watch(watch_getters(), () => (selected.value = false));
+
+// We have to write this, instead of directly `watch`ing `props`, because the
+// wasm-exported `Node` keeps triggering `watch` when it should not, setting
+// `selected.value` back to `false`.
+//
+// And because this issue only happens with wasm-exported types, it cannot be
+// captured by the test "`underline` gained by correct nodes", which uses a
+// mocked version of `Node`.
+//
+// As a sidenote, this only happens when a parent node is clicked and then its
+// child. Clicking the child again highlights the child correctly. The reason
+// for this not happening on every click is unknown.
+function watch_getters(node?: Node): (() => string | number | undefined)[] {
+  const getters: (() => string | number | undefined)[] = [];
+
+  getters.push(() => props.depth);
+
+  if (node === undefined) {
+    getters.push(() => props.node.text);
+    getters.push(() => props.node.offset);
+    getters.push(() => props.node.length);
+    props.node.children.forEach((child) =>
+      getters.push(...watch_getters(child)),
+    );
+  } else {
+    getters.push(() => node.text);
+    getters.push(() => node.offset);
+    getters.push(() => node.length);
+    node.children.forEach((child) => getters.push(...watch_getters(child)));
+  }
+
+  return getters;
+}
 
 function select() {
   if (has_span.value) {
