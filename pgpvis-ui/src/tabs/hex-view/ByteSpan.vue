@@ -16,7 +16,7 @@ function has_byte_overflown(byte: number): boolean {
 
 <template>
   <span
-    class="inline-block px-[0.5ch] select-none"
+    class="inline-block px-[0.5ch] transition-colors duration-50 select-none"
     :class="{ 'bg-sky-200': selected }"
     >{{
       has_byte_overflown(props.byte)

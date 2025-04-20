@@ -9,3 +9,7 @@
 @utility gutter-stable {
   scrollbar-gutter: stable;
 }
+
+@utility skip-ink {
+  text-decoration-skip-ink: none;
+}

@@ -45,15 +45,23 @@ describe("leaf node", () => {
       expect(component.get("span").classes()).toContain("cursor-pointer");
     });
 
-    test("emit 'span-selected' on clicking", async ({ span_selected }) => {
-      await component.get("span").trigger("click");
+    describe("on clicking", () => {
+      test("emit 'span-selected'", async ({ span_selected }) => {
+        await component.get("span").trigger("click");
 
-      expect(span_selected).toHaveBeenCalledOnce();
-      // Not sure why there is the `undefined`
-      expect(span_selected).toHaveBeenCalledWith(
-        { offset: 0, length: 1 },
-        undefined,
-      );
+        expect(span_selected).toHaveBeenCalledOnce();
+        // Not sure why there is the `undefined`
+        expect(span_selected).toHaveBeenCalledWith(
+          { offset: 0, length: 1 },
+          undefined,
+        );
+      });
+
+      test("gain `underline`", async () => {
+        expect(component.get("span").classes()).not.toContain("underline");
+        await component.get("span").trigger("click");
+        expect(component.get("span").classes()).toContain("underline");
+      });
     });
   });
 
@@ -70,16 +78,18 @@ describe("leaf node", () => {
       expect(component.get("span").classes()).not.toContain("cursor-pointer");
     });
 
-    test("emit no 'span-selected' on clicking", () => {
-      const bus = useEventBus<{ offset: number; length: number }>(
-        "span-selected",
-      );
-      const mock = vi.fn(() => {});
-      bus.on(mock);
+    describe("on clicking", () => {
+      test("emit no 'span-selected'", ({ span_selected }) => {
+        component.get("span").trigger("click");
 
-      component.get("span").trigger("click");
+        expect(span_selected).not.toHaveBeenCalled();
+      });
 
-      expect(mock).not.toHaveBeenCalled();
+      test("gain no `underline`", async () => {
+        expect(component.get("span").classes()).not.toContain("underline");
+        await component.get("span").trigger("click");
+        expect(component.get("span").classes()).not.toContain("underline");
+      });
     });
   });
 
@@ -89,7 +99,7 @@ describe("leaf node", () => {
         props: { node: new MockedNode("foo"), depth: 0 },
       });
       await component.setProps({ node: new MockedNode("foo", [], 0, 1) });
-      component.get("span").trigger("click");
+      await component.get("span").trigger("click");
 
       expect(component.get("span").classes()).toContain("cursor-pointer");
       expect(span_selected).toHaveBeenCalledOnce();
@@ -97,6 +107,7 @@ describe("leaf node", () => {
         { offset: 0, length: 1 },
         undefined,
       );
+      expect(component.get("span").classes()).toContain("underline");
     });
 
     test("changing both", async ({ span_selected }) => {
@@ -104,7 +115,7 @@ describe("leaf node", () => {
         props: { node: new MockedNode("foo", [], 0, 1), depth: 0 },
       });
       await component.setProps({ node: new MockedNode("bar", [], 2, 3) });
-      component.get("span").trigger("click");
+      await component.get("span").trigger("click");
 
       expect(component.get("span").text()).toBe("bar");
       expect(component.get("span").classes()).toContain("cursor-pointer");
@@ -113,6 +124,7 @@ describe("leaf node", () => {
         { offset: 2, length: 3 },
         undefined,
       );
+      expect(component.get("span").classes()).toContain("underline");
     });
 
     test("removing span", async ({ span_selected }) => {
@@ -120,10 +132,35 @@ describe("leaf node", () => {
         props: { node: new MockedNode("foo", [], 0, 1), depth: 0 },
       });
       await component.setProps({ node: new MockedNode("foo") });
-      component.get("span").trigger("click");
+      await component.get("span").trigger("click");
 
       expect(component.get("span").classes()).not.toContain("cursor-pointer");
       expect(span_selected).not.toHaveBeenCalled();
+      expect(component.get("span").classes()).not.toContain("underline");
+    });
+
+    describe("`selected` removed", () => {
+      test("changing span", async () => {
+        const component = shallowMount(NodeTree, {
+          props: { node: new MockedNode("foo", [], 0, 1), depth: 0 },
+        });
+        await component.get("span").trigger("click");
+        expect(component.get("span").classes()).toContain("underline");
+
+        await component.setProps({ node: new MockedNode("foo", [], 2, 3) });
+        expect(component.get("span").classes()).not.toContain("underline");
+      });
+
+      test("removing span", async () => {
+        const component = shallowMount(NodeTree, {
+          props: { node: new MockedNode("foo", [], 0, 1), depth: 0 },
+        });
+        await component.get("span").trigger("click");
+        expect(component.get("span").classes()).toContain("underline");
+
+        await component.setProps({ node: new MockedNode("foo") });
+        expect(component.get("span").classes()).not.toContain("underline");
+      });
     });
   });
 });
@@ -159,6 +196,25 @@ describe("children", () => {
     expect(children[1].get("span").text()).toBe("children 1");
   });
 
+  test("ident guides", () => {
+    const outer_classes = ["bg-gray-200", "pl-px"];
+    const inner_classes = ["bg-white", "pl-[calc(2ch-1px)]"];
+
+    outer_classes.map((c) => expect(parent.classes()).not.toContain(c));
+    inner_classes.map((c) =>
+      expect(parent.get(":scope > div").classes()).not.toContain(c),
+    );
+
+    outer_classes.map((c) => expect(children[0].classes()).toContain(c));
+    inner_classes.map((c) =>
+      expect(children[0].get(":scope > div").classes()).toContain(c),
+    );
+    outer_classes.map((c) => expect(children[1].classes()).toContain(c));
+    inner_classes.map((c) =>
+      expect(children[1].get(":scope > div").classes()).toContain(c),
+    );
+  });
+
   test("`cursor-pointer` on correct nodes", () => {
     expect(parent.get(":scope > span").classes()).toContain("cursor-pointer");
     expect(children[0].get("span").classes()).not.toContain("cursor-pointer");
@@ -185,5 +241,23 @@ describe("children", () => {
       { offset: 0, length: 1 },
       undefined,
     );
+  });
+
+  test("`underline` gained by correct nodes", async () => {
+    await parent.get(":scope > span").trigger("click");
+    expect(parent.get(":scope > span").classes()).toContain("underline");
+    expect(children[0].get("span").classes()).not.toContain("underline");
+    expect(children[1].get("span").classes()).not.toContain("underline");
+
+    await children[0].get("span").trigger("click");
+    // `underline` on parent not removed, and no new `underline` gained
+    expect(parent.get(":scope > span").classes()).toContain("underline");
+    expect(children[0].get("span").classes()).not.toContain("underline");
+    expect(children[1].get("span").classes()).not.toContain("underline");
+
+    await children[1].get("span").trigger("click");
+    expect(parent.get(":scope > span").classes()).not.toContain("underline");
+    expect(children[0].get("span").classes()).not.toContain("underline");
+    expect(children[1].get("span").classes()).toContain("underline");
   });
 });

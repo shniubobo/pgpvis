@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ArrowRightIcon } from "@heroicons/vue/24/outline";
 import { ref } from "vue";
 
 import { Node, parse, ParseOptions } from "pgpvis-core";
@@ -21,8 +22,20 @@ function do_parse() {
 </script>
 
 <template>
-  <div class="flex h-full flex-col p-4">
-    <textarea v-model="message" class="flex-grow resize-none text-nowrap" />
-    <button @click="do_parse">Parse</button>
+  <div class="relative flex h-full flex-col">
+    <textarea
+      v-model="message"
+      class="flex-grow resize-none overflow-y-scroll bg-gray-100 pt-4 pb-4 pl-[2ch] text-nowrap focus:outline-hidden"
+      placeholder="Paste armored OpenPGP message here ..."
+    />
+    <div class="absolute right-12 bottom-8 flex items-center justify-center">
+      <button
+        type="button"
+        class="relative rounded-full bg-white p-3 shadow-md transition-shadow hover:shadow-lg"
+        @click="do_parse"
+      >
+        <ArrowRightIcon class="size-6" />
+      </button>
+    </div>
   </div>
 </template>
