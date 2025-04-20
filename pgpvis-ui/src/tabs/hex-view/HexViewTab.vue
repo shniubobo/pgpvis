@@ -66,11 +66,12 @@ const virtual_lines = computed(() =>
 
 const selected_bytes = ref<boolean[]>([]);
 watch(
-  () => props.bytes.length,
+  () => props.bytes,
   () => {
     // Initialize all bytes to unselected when `props.bytes` updates
     selected_bytes.value = Array(props.bytes.length).fill(false);
   },
+  { immediate: true, deep: true },
 );
 provide("selected-bytes", selected_bytes);
 
