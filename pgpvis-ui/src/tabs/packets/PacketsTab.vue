@@ -6,7 +6,7 @@ const props = defineProps<{ nodes: Node[] }>();
 </script>
 
 <template>
-  <div class="gutter-stable h-screen overflow-auto p-4">
+  <div class="h-screen overflow-auto p-4 gutter-stable">
     <NodeTree
       v-for="(node, idx) in props.nodes"
       :key="idx"

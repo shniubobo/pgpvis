@@ -119,7 +119,7 @@ function get_center_line_index(offset: number, length: number) {
 </script>
 
 <template>
-  <div ref="hex-view" class="gutter-stable h-screen overflow-auto p-4">
+  <div ref="hex-view" class="h-screen overflow-auto p-4 gutter-stable">
     <div
       class="relative w-full"
       :style="{ height: `${virtual_hex_view.value.getTotalSize()}px` }"

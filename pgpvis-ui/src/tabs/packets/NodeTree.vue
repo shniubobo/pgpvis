@@ -69,7 +69,7 @@ const indent_guide_classes_inner = computed(() => {
   <div :class="indent_guide_classes_outer">
     <div :class="indent_guide_classes_inner">
       <span
-        class="skip-ink decoration-blue-300/60 decoration-[0.5em] -underline-offset-[0.25em] transition-[text-decoration] duration-50 select-none"
+        class="decoration-blue-300/60 decoration-[0.5em] -underline-offset-[0.25em] transition-[text-decoration] duration-50 select-none skip-ink"
         :class="{ 'cursor-pointer': has_span, underline: selected }"
         @click="select"
         >{{ props.node.text }}</span
