@@ -1,0 +1,50 @@
+name: Setup dependencies
+description: Setup dependencies
+
+runs:
+  using: composite
+  steps:
+    - name: Setup Rust toolchain cache
+      id: cache-rust-toolchain
+      uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684  # v4.2.3
+      with:
+        path: ~/.rustup/toolchains/
+        key: rust-toolchain-${{ hashFiles('./rust-toolchain.toml') }}
+    - name: Setup Rust
+      if: steps.cache-rust-toolchain.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        rustup toolchain install
+    - name: Setup Rust dependency cache
+      uses: Swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6  # v2.7.8
+
+    # This has to be before `setup-node`.
+    # See https://github.com/actions/setup-node/blob/49933ea5288caeca8642d1e84afbd3f7d6820020/docs/advanced-usage.md#caching-packages-data
+    - name: Setup pnpm
+      uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda  # v4.1.0
+    - name: Setup Node
+      uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4.4.0
+      with:
+        node-version-file: .nvmrc
+        cache: pnpm
+    - name: Install pnpm dependencies
+      shell: bash
+      run: |
+        pnpm i
+
+    - name: Setup editorconfig-checker cache
+      id: cache-editorconfig-checker
+      uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684  # v4.2.3
+      with:
+        path: /usr/local/bin/editorconfig-checker
+        key: editorconfig-checker-${{ hashFiles('/usr/local/bin/editorconfig-checker') }}
+    - name: Setup editorconfig-checker
+      if: steps.cache-editorconfig-checker.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        cd $(mktemp -d)
+        wget https://github.com/editorconfig-checker/editorconfig-checker/releases/download/v3.2.1/editorconfig-checker-linux-amd64.tar.gz
+        echo "fd130e0731d9f9dd3a31dfff594996bffc2d448677e74b6d2dfb10f8992d6c92 editorconfig-checker-linux-amd64.tar.gz" | sha256sum --check
+        tar xfzv editorconfig-checker-linux-amd64.tar.gz
+        cp editorconfig-checker /usr/local/bin/
+        chmod +x /usr/local/bin/editorconfig-checker

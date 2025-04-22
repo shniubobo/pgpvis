@@ -1,0 +1,37 @@
+name: Build
+
+on:
+  push:
+    branches:
+      - master
+    tags:
+      - 'v*'
+  pull_request:
+    branches:
+      - master
+
+jobs:
+  check:
+    name: Lint & Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+        with:
+          # `version.sh` needs git history to determine the version.
+          fetch-depth: 0
+
+      - uses: ./.github/actions/setup
+
+      # Required to lint and test `pgpvis-ui`
+      - name: Build `pgpvis-core`
+        run: |
+          pnpm -F pgpvis-core build
+
+      - name: Lint
+        run: |
+          pnpm lint
+      - name: Test
+        run: |
+          pnpm test

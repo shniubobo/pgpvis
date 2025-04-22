@@ -1,6 +1,6 @@
 {
   "scripts": {
-    "lint": "pnpm -F 'pgpvis-*' lint",
+    "lint": "editorconfig-checker && pnpm -F 'pgpvis-*' lint",
     "test": "pnpm -F 'pgpvis-*' test",
     "dist": "pnpm dist-core && pnpm dist-ui",
     "dist-core": "pnpm -F pgpvis-core dist",
