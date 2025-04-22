@@ -2,7 +2,7 @@
   "name": "pgpvis-core",
   "private": true,
   "scripts": {
-    "lint": "RUSTFLAGS=-Dwarnings cargo fmt --check && cargo clippy",
+    "lint": "cargo fmt --check && cargo clippy",
     "test": "cargo test",
     "build": "wasm-pack build --dev",
     "dist": "wasm-pack build",
