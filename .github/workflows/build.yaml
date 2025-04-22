@@ -1,0 +1,117 @@
+name: Build
+
+on:
+  push:
+    branches:
+      - master
+    tags:
+      - 'v*'
+  pull_request:
+    branches:
+      - master
+
+env:
+  RUSTFLAGS: -Dwarnings
+
+jobs:
+  check:
+    name: Lint & Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+        with:
+          # https://github.com/actions/checkout/tree/11bd71901bbe5b1630ceea73d27597364c9af683/?tab=readme-ov-file#checkout-pull-request-head-commit-instead-of-merge-commit
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - uses: ./.github/actions/setup
+
+      # Required to lint and test `pgpvis-ui`
+      - name: Build `pgpvis-core`
+        run: |
+          pnpm -F pgpvis-core build
+
+      - name: Lint
+        run: |
+          pnpm lint
+      - name: Test
+        run: |
+          pnpm test
+
+  build:
+    name: Build
+    needs: check
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+        with:
+          # `version.sh` needs git history to determine the version.
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - uses: ./.github/actions/setup
+
+      - name: Build for production
+        run: |
+          ./scripts/dist.sh
+
+      - name: Get pgpvis version
+        id: pgpvis-version
+        run: |
+          echo "PGPVIS_VERSION=$(./scripts/version.sh)" >> "$GITHUB_OUTPUT"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
+        with:
+          name: pgpvis
+          path: |
+            ./dist/
+          if-no-files-found: error
+          # The artifacts are already gzipped
+          compression-level: 0
+
+  deploy-preview:
+    name: Deploy to Cloudflare Pages (Preview)
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+        with:
+          # `version.sh` needs git history to determine the version.
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      # Needed by `wrangler`
+      - name: Setup pnpm
+        uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda  # v4.1.0
+
+      - name: Download artifacts
+        uses: actions/download-artifact@95815c38cf2ff2164869cbab79da8d1f422bc89e  # v4.2.1
+        with:
+          name: pgpvis
+          path: ./dist/
+
+      - name: Get pgpvis version
+        id: pgpvis-version
+        run: |
+          echo "PGPVIS_VERSION=$(./scripts/version.sh)" >> "$GITHUB_OUTPUT"
+
+      - name: Untar artifacts
+        run: |
+          cd ./dist/
+          tar xfvz ./pgpvis-${{ steps.pgpvis-version.outputs.PGPVIS_VERSION }}.tar.gz
+
+      - name: Upload to Cloudflare
+        uses: cloudflare/wrangler-action@da0e0dfe58b7a431659754fdf3f186c529afbe65  # v3.14.1
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          # https://github.com/cloudflare/wrangler-action/issues/181#issuecomment-1766535917
+          workingDirectory: ./pgpvis-core/  # Any subdir with a `package.json` will work.
+          packageManager: pnpm
+          command: pages deploy --project-name pgpvis ../dist/pgpvis-${{ steps.pgpvis-version.outputs.PGPVIS_VERSION }}
