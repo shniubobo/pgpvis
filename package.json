@@ -11,6 +11,11 @@
   "pnpm": {
     "overrides": {
       "axios@<0.30.0": ">=0.30.0"
-    }
+    },
+    "onlyBuiltDependencies": [
+      "@swc/core",
+      "esbuild",
+      "wasm-pack"
+    ]
   }
 }
