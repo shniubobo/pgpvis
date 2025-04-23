@@ -189,7 +189,7 @@ describe("children", () => {
 
   test("text is displayed", () => {
     expect(parent.findAll("span")).toHaveLength(3);
-    expect(parent.get(":scope > span").text()).toBe("parent");
+    expect(parent.get(":scope > div > span").text()).toBe("parent");
 
     expect(children).toHaveLength(2);
     expect(children[0].get("span").text()).toBe("children 0");
@@ -216,7 +216,9 @@ describe("children", () => {
   });
 
   test("`cursor-pointer` on correct nodes", () => {
-    expect(parent.get(":scope > span").classes()).toContain("cursor-pointer");
+    expect(parent.get(":scope > div > span").classes()).toContain(
+      "cursor-pointer",
+    );
     expect(children[0].get("span").classes()).not.toContain("cursor-pointer");
     expect(children[1].get("span").classes()).toContain("cursor-pointer");
   });
@@ -224,7 +226,7 @@ describe("children", () => {
   test("'span-selected' emitted from correct nodes", async ({
     span_selected,
   }) => {
-    await parent.get(":scope > span").trigger("click");
+    await parent.get(":scope > div > span").trigger("click");
     expect(span_selected).toHaveBeenCalledOnce();
     expect(span_selected).toHaveBeenCalledWith(
       { offset: 2, length: 3 },
@@ -243,20 +245,30 @@ describe("children", () => {
     );
   });
 
+  // Encountered a strange bug in this test case. If
+  // `parent.get("div").get("span")` is replaced with
+  // `parent.get(":scope > div > span")`, the result will change from time to
+  // time.
   test("`underline` gained by correct nodes", async () => {
-    await parent.get(":scope > span").trigger("click");
-    expect(parent.get(":scope > span").classes()).toContain("underline");
+    await parent.get("div").get("span").trigger("click");
+    // Assume we insert `parent.get(":scope > div > span").html()` on these
+    // lines. On this line, it's the parent, ...
+    expect(parent.get("div").get("span").classes()).toContain("underline");
+    // ..., and here it's still the parent. However, ...
     expect(children[0].get("span").classes()).not.toContain("underline");
+    // ..., here it becomes child 0 😧 ...
     expect(children[1].get("span").classes()).not.toContain("underline");
+    // ..., and here it becomes child 1 🫠
+    // TODO: Report the bug, to `vite` and to `vue-test-utils`.
 
     await children[0].get("span").trigger("click");
     // `underline` on parent not removed, and no new `underline` gained
-    expect(parent.get(":scope > span").classes()).toContain("underline");
+    expect(parent.get("div").get("span").classes()).toContain("underline");
     expect(children[0].get("span").classes()).not.toContain("underline");
     expect(children[1].get("span").classes()).not.toContain("underline");
 
     await children[1].get("span").trigger("click");
-    expect(parent.get(":scope > span").classes()).not.toContain("underline");
+    expect(parent.get("div").get("span").classes()).not.toContain("underline");
     expect(children[0].get("span").classes()).not.toContain("underline");
     expect(children[1].get("span").classes()).toContain("underline");
   });
