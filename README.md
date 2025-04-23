@@ -4,7 +4,7 @@
 hex view and a packet tree for octet-level inspection. It could be thought of as
 a GUI version of `pgpdump`, `gpg --list-packets`, or `sq packet dump --hex`.
 
-Try for yourself: \[TODO: Add link to deployment\]
+Try for yourself: [pgpvis.shniubobo.com](https://pgpvis.shniubobo.com/)
 
 > [!WARNING]
 >
