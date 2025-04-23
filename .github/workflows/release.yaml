@@ -16,6 +16,10 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
         with:
           fetch-depth: 0
+      # https://github.com/actions/checkout/issues/290
+      - name: Fetch annotated tags
+        run: |
+          git fetch --tags --force
 
       - name: Download artifacts
         uses: actions/download-artifact@95815c38cf2ff2164869cbab79da8d1f422bc89e  # v4.2.1
