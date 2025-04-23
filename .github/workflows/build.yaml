@@ -115,3 +115,11 @@ jobs:
           workingDirectory: ./pgpvis-core/  # Any subdir with a `package.json` will work.
           packageManager: pnpm
           command: pages deploy --project-name pgpvis ../dist/pgpvis-${{ steps.pgpvis-version.outputs.PGPVIS_VERSION }}
+
+  release:
+    needs: build
+    if: github.ref_type == 'tag'
+    permissions:
+      contents: write
+      deployments: write
+    uses: ./.github/workflows/release.yaml
