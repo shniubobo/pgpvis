@@ -11,6 +11,12 @@
 header = """
 # Changelog
 
+{% if version -%}
+    ## {{ version | trim_start_matches(pat="v") }} - {{ timestamp | date(format="%Y-%m-%d") -}}
+{%- else -%}
+    ## Unreleased
+{%- endif %}
+
 """
 
 # template for the changelog body
@@ -47,9 +53,9 @@ body = """
 {%- endmacro commit -%}
 
 {%- if version -%}
-    ## {{ version | trim_start_matches(pat="v") }} - {{ timestamp | date(format="%Y-%m-%d") -}}
+    <!-- {{ version | trim_start_matches(pat="v") }} - {{ timestamp | date(format="%Y-%m-%d") }} -->
 {%- else -%}
-    ## Unreleased
+    <!-- Unreleased -->
 {%- endif %}
 
 {% if previous -%}
