@@ -79,12 +79,17 @@ jobs:
 
       - name: Verify signature
         run: |
+          export STATUS_FILE=$(mktemp)
           gpg \
+            --batch \
+            --status-file $STATUS_FILE \
             --verify \
             <(echo "${{ needs.prepare-release.outputs.pgp_sig }}") \
             ./dist/pgpvis-${{ needs.prepare-release.outputs.version }}.tar.gz \
+            < /dev/null \
             2>&1 \
             | sed -e 's|<.*>|<email redacted>|'
+          grep '^\[GNUPG:\] VALIDSIG' $STATUS_FILE
 
   deploy:
     name: Deploy to Cloudflare Pages
