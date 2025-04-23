@@ -64,7 +64,7 @@ body = """
 
 {% if previous -%}
     {%- if previous.commit_id and commit_id -%}
-        Commits since last release: [
+        > Commits since last release: [
             {{- previous.commit_id | truncate(length=7, end="") -}}
             ...{{ commit_id | truncate(length=7, end="") -}}
         ]($REPO/compare/{{ previous.commit_id }}...{{ commit_id }})
