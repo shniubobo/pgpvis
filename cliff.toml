@@ -29,7 +29,11 @@ body = """
         - {% if commit.scope %}**{{ commit.scope }}** {% endif -%}
             {%- if commit.breaking %}**BREAKING** {% endif -%}
             {{- commit.message | upper_first }} (
-                {{- self::commit(id=commit.id) }} by {{ commit.author.name -}}
+                {{- self::commit(id=commit.id) }} by {% if commit.remote.username -%}
+                    @{{ commit.remote.username -}}
+                {%- else -%}
+                    {{- commit.author.name -}}
+                {%- endif -%}
 
                 {%- if commit.raw_message is matching("(?im)^Summary-of:") -%}
                     {%- set_global summarized_commit_ids = [] -%}
@@ -148,3 +152,8 @@ filter_commits = false
 topo_order = false
 # sort the commits inside sections by oldest/newest order
 sort_commits = "oldest"
+
+
+[remote.github]
+owner = "shniubobo"
+repo = "pgpvis"
