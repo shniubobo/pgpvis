@@ -18,3 +18,6 @@ wasm-bindgen = "0.2.100"
 
 [dev-dependencies]
 insta = { version = "1.42.2", features = ["yaml"] }
+
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = ["-O"]
