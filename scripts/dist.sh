@@ -16,6 +16,10 @@ echo "SOURCE_DATE_EPOCH: $SOURCE_DATE_EPOCH ($source_date_iso)"
 version="$($script_dir/version.sh)"
 dist_name="pgpvis-$version"
 echo "Building $dist_name"
+
+echo "============================================================"
+echo "Rust toolchain:"
+rustup show -v
 echo "============================================================"
 
 mkdir -p "$dist_dir"
