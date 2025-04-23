@@ -6,6 +6,7 @@ on:
 jobs:
   prepare-release:
     name: Prepare for release
+    environment: production
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -86,6 +87,7 @@ jobs:
     needs:
       - prepare-release
       - check-sig
+    environment: production
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:

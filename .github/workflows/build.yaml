@@ -123,3 +123,4 @@ jobs:
       contents: write
       deployments: write
     uses: ./.github/workflows/release.yaml
+    secrets: inherit
