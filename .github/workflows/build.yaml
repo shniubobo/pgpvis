@@ -11,7 +11,8 @@ on:
       - master
 
 env:
-  RUSTFLAGS: -Dwarnings --remap-path-prefix /home/runner=/home/redacted
+  RUSTFLAGS: -Dwarnings
+  RUSTC_BOOTSTRAP: 1
 
 jobs:
   check:
