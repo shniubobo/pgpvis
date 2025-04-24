@@ -6,7 +6,7 @@ members = [
 
 [profile.release]
 opt-level = "s"
-strip = "symbols"
+strip = "none"
 lto = true
 panic = "abort"
 incremental = false
