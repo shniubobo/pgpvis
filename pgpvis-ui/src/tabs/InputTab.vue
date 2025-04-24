@@ -12,6 +12,11 @@ const emit = defineEmits<{
 }>();
 
 function do_parse() {
+  if (message.value === "") {
+    emit("update-hex-view", new Uint8Array());
+    emit("update-packets", []);
+    return;
+  }
   const encoded_message = new TextEncoder().encode(message.value);
   // TODO: Allow users to choose whether to dearmor or not.
   const parse_options = new ParseOptions(true);

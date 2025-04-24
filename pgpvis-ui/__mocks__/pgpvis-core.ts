@@ -1,3 +1,13 @@
+export function parse(
+  _options: ParseOptions,
+  message: Uint8Array,
+): ParseOutput {
+  if (message.length === 0) {
+    throw new Error("failed to read message");
+  }
+  return new ParseOutput(new Uint8Array(1), [new Node("1")]);
+}
+
 export class Node {
   readonly text: string;
   readonly children: Node[];
@@ -15,6 +25,12 @@ export class Node {
     this.offset = offset;
     this.length = length;
   }
+
+  public free() {}
+}
+
+export class ParseOptions {
+  public constructor(public dearmor: boolean) {}
 
   public free() {}
 }
