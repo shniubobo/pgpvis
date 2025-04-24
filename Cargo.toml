@@ -7,7 +7,7 @@ members = [
 ]
 
 [profile.release]
-opt-level = 0
+opt-level = "s"
 strip = "none"
 lto = true
 panic = "abort"
