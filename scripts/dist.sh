@@ -20,6 +20,9 @@ echo "Building $dist_name"
 echo "============================================================"
 echo "Rust toolchain:"
 rustup show -v
+echo ""
+echo "rustc version:"
+rustc --version --verbose
 echo "============================================================"
 
 mkdir -p "$dist_dir"
