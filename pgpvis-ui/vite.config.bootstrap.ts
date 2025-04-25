@@ -6,6 +6,7 @@ export default defineConfig({
   mode: "development",
   plugins: [
     rust({
+      verbose: process.env.CI === "true",
       extraArgs: {
         wasmOpt: [],
       },

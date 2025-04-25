@@ -1,6 +1,6 @@
 {
   "scripts": {
-    "bootstrap": "pnpm -F pgpvis-ui bootstrap",
+    "bootstrap": "pnpm -F pgpvis-core dist:wasm-bindgen && pnpm -F pgpvis-ui bootstrap",
     "lint": "editorconfig-checker && pnpm -F 'pgpvis-*' lint",
     "test": "pnpm -F 'pgpvis-*' test",
     "dist": "pnpm -F pgpvis-ui dist",

@@ -3,12 +3,12 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "bootstrap": "NODE_ENV=development vite -c vite.config.bootstrap.ts build",
+    "bootstrap": "NODE_ENV=development WASM_BINDGEN_BIN=../target/wasm-bindgen vite -c vite.config.bootstrap.ts build",
     "lint": "eslint && prettier --check . && pnpm type-check",
     "test": "vitest run",
-    "dev": "vite",
+    "dev": "WASM_BINDGEN_BIN=../target/wasm-bindgen vite",
     "preview": "vite preview",
-    "dist": "vite build",
+    "dist": "WASM_BINDGEN_BIN=../target/wasm-bindgen vite build",
     "type-check": "vue-tsc --build",
     "clean": "rm -rf ./dist/"
   },
