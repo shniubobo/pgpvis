@@ -113,7 +113,7 @@ jobs:
                 '#', github.event.number, ':',
                 github.event.pull_request.title
               )
-              || github.event.head_commit.message
+              || github.event.head_commit.id
             }}"
             ./dist/pgpvis-${{ needs.build.outputs.version }}
 
