@@ -1,21 +1,19 @@
 {
   "scripts": {
+    "bootstrap": "pnpm -F pgpvis-core dist:wasm-bindgen && pnpm -F pgpvis-ui bootstrap",
     "lint": "editorconfig-checker && pnpm -F 'pgpvis-*' lint",
     "test": "pnpm -F 'pgpvis-*' test",
-    "dist": "pnpm dist-core && pnpm dist-ui",
-    "dist-core": "pnpm -F pgpvis-core dist",
-    "dist-ui": "pnpm -F pgpvis-ui dist",
-    "clean": "rm -f ./dist/*.tar.gz && pnpm -F 'pgpvis-*' clean"
+    "dist": "pnpm -F pgpvis-ui dist",
+    "clean": "rm -f ./dist/*.tar.gz && pnpm -F pgpvis-ui clean"
   },
   "packageManager": "pnpm@10.9.0+sha512.0486e394640d3c1fb3c9d43d49cf92879ff74f8516959c235308f5a8f62e2e19528a65cdc2a3058f587cde71eba3d5b56327c8c33a97e4c4051ca48a10ca2d5f",
   "pnpm": {
-    "overrides": {
-      "axios@<0.30.0": ">=0.30.0"
-    },
     "onlyBuiltDependencies": [
       "@swc/core",
-      "esbuild",
-      "wasm-pack"
-    ]
+      "esbuild"
+    ],
+    "patchedDependencies": {
+      "@wasm-tool/rollup-plugin-rust@3.0.4": "patches/@wasm-tool__rollup-plugin-rust@3.0.4.patch"
+    }
   }
 }

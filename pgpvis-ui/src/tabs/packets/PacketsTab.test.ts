@@ -1,6 +1,6 @@
 import { mount, shallowMount } from "@vue/test-utils";
 
-import { Node as MockedNode } from "@mocks/pgpvis-core";
+import { Node as MockedNode } from "@mocks/@pgpvis-core";
 import NodeTree from "./NodeTree.vue";
 import PacketsTab from "./PacketsTab.vue";
 

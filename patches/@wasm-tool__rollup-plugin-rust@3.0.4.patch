@@ -1,0 +1,13 @@
+diff --git a/src/index.js b/src/index.js
+index c97bd889b13d7f363ab301323eee71f587e3d8c0..00bc8a62ce546ca018d9390ba71c28711c35f88a 100644
+--- a/src/index.js
++++ b/src/index.js
+@@ -781,7 +781,7 @@ export default function rust(options = {}) {
+ 
+         resolveFileUrl(info) {
+             if (state.fileIds.has(info.referenceId)) {
+-                return `new URL(${JSON.stringify(info.fileName)}, import.meta.url)`;
++                return `new URL(${JSON.stringify(info.fileName).replace("assets/", "")}, import.meta.url)`;
+ 
+             } else {
+                 return null;

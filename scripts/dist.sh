@@ -20,10 +20,14 @@ echo "Building $dist_name"
 echo "============================================================"
 echo "Rust toolchain:"
 rustup show -v
+echo ""
+echo "rustc version:"
+rustc --version --verbose
 echo "============================================================"
 
 mkdir -p "$dist_dir"
 pnpm clean
+pnpm -F pgpvis-core dist:wasm-bindgen
 VITE_PGPVIS_VERSION="$version" pnpm dist
 
 echo "============================================================"

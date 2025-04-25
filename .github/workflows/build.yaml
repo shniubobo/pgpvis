@@ -11,7 +11,8 @@ on:
       - master
 
 env:
-  RUSTFLAGS: -Dwarnings --remap-path-prefix /home/runner=/home/redacted
+  RUSTFLAGS: -Dwarnings
+  RUSTC_BOOTSTRAP: 1
 
 jobs:
   check:
@@ -28,9 +29,9 @@ jobs:
       - uses: ./.github/actions/setup
 
       # Required to lint and test `pgpvis-ui`
-      - name: Build `pgpvis-core`
+      - name: Generate `pgpvis_core.d.ts`
         run: |
-          pnpm -F pgpvis-core build
+          pnpm bootstrap
 
       - name: Lint
         run: |
@@ -59,19 +60,21 @@ jobs:
           ./scripts/dist.sh
 
       - name: Get pgpvis version
-        id: pgpvis-version
+        id: version
         run: |
-          echo "PGPVIS_VERSION=$(./scripts/version.sh)" >> "$GITHUB_OUTPUT"
+          echo "version=$(./scripts/version.sh)" >> "$GITHUB_OUTPUT"
 
       - name: Upload artifacts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
         with:
-          name: pgpvis
+          name: pgpvis-${{ steps.version.outputs.version }}
           path: |
             ./dist/
           if-no-files-found: error
           # The artifacts are already gzipped
           compression-level: 0
+    outputs:
+      version: ${{ steps.version.outputs.version }}
 
   deploy-preview:
     name: Deploy to Cloudflare Pages (Preview)
@@ -79,42 +82,40 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
-        with:
-          # `version.sh` needs git history to determine the version.
-          fetch-depth: 0
-          ref: ${{ github.event.pull_request.head.sha }}
-
-      # Needed by `wrangler`
-      - name: Setup pnpm
-        uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda  # v4.1.0
-
       - name: Download artifacts
         uses: actions/download-artifact@95815c38cf2ff2164869cbab79da8d1f422bc89e  # v4.2.1
         with:
-          name: pgpvis
+          name: pgpvis-${{ needs.build.outputs.version }}
           path: ./dist/
-
-      - name: Get pgpvis version
-        id: pgpvis-version
-        run: |
-          echo "PGPVIS_VERSION=$(./scripts/version.sh)" >> "$GITHUB_OUTPUT"
 
       - name: Untar artifacts
         run: |
           cd ./dist/
-          tar xfvz ./pgpvis-${{ steps.pgpvis-version.outputs.PGPVIS_VERSION }}.tar.gz
+          tar xfvz ./pgpvis-${{ needs.build.outputs.version }}.tar.gz
 
       - name: Upload to Cloudflare
         uses: cloudflare/wrangler-action@da0e0dfe58b7a431659754fdf3f186c529afbe65  # v3.14.1
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          # https://github.com/cloudflare/wrangler-action/issues/181#issuecomment-1766535917
-          workingDirectory: ./pgpvis-core/  # Any subdir with a `package.json` will work.
-          packageManager: pnpm
-          command: pages deploy --project-name pgpvis ../dist/pgpvis-${{ steps.pgpvis-version.outputs.PGPVIS_VERSION }}
+          command: pages deploy
+            --project-name pgpvis
+            --branch HEAD
+            --commit-hash ${{
+              github.event_name == 'pull_request'
+              && github.event.pull_request.head.sha
+              || github.sha
+            }}
+            --commit-message "${{
+              github.event_name == 'pull_request'
+              && format(
+                'PR {0}{1}{2} {3}',
+                '#', github.event.number, ':',
+                github.event.pull_request.title
+              )
+              || github.event.head_commit.message
+            }}"
+            ./dist/pgpvis-${{ needs.build.outputs.version }}
 
   release:
     needs: build
@@ -122,5 +123,7 @@ jobs:
     permissions:
       contents: write
       deployments: write
-    uses: ./.github/workflows/release.yaml
     secrets: inherit
+    uses: ./.github/workflows/release.yaml
+    with:
+      version: ${{ needs.build.outputs.version }}

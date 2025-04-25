@@ -1,0 +1,6 @@
+[unstable]
+bindeps = true
+trim-paths = true
+
+[profile.release]
+trim-paths = "all"

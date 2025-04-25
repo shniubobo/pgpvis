@@ -2,7 +2,8 @@
 import { ArrowRightIcon } from "@heroicons/vue/24/outline";
 import { ref } from "vue";
 
-import { Node, parse, ParseOptions } from "pgpvis-core";
+// See comments on `PacketTab`.
+import { Node, parse, ParseOptions } from "../../../pgpvis-core/Cargo.toml";
 
 const message = ref("");
 

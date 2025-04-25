@@ -1,9 +1,9 @@
 import { mount, type VueWrapper } from "@vue/test-utils";
 
-import { Node } from "@mocks/pgpvis-core";
+import { Node } from "@mocks/@pgpvis-core";
 import InputTab from "./InputTab.vue";
 
-vi.mock("pgpvis-core");
+vi.mock("@pgpvis-core");
 
 let input_tab: VueWrapper;
 
