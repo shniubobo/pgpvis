@@ -100,7 +100,15 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: pages deploy
             --project-name pgpvis
-            --branch HEAD
+            --branch ${{
+              github.event_name == 'pull_request'
+              && format('pr/{0}', github.event.number)
+              || (
+                github.ref_type == 'branch'
+                && github.ref_name
+                || format('tags/{0}', github.ref_name)
+              )
+            }}
             --commit-hash ${{
               github.event_name == 'pull_request'
               && github.event.pull_request.head.sha
@@ -108,12 +116,8 @@ jobs:
             }}
             --commit-message "${{
               github.event_name == 'pull_request'
-              && format(
-                'PR {0}{1}{2} {3}',
-                '#', github.event.number, ':',
-                github.event.pull_request.title
-              )
-              || github.event.head_commit.id
+              && github.event.pull_request.title
+              || github.sha
             }}"
             ./dist/pgpvis-${{ needs.build.outputs.version }}
 
