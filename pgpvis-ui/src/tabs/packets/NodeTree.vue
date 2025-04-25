@@ -2,7 +2,8 @@
 import { useEventBus } from "@vueuse/core";
 import { computed, ref, watch } from "vue";
 
-import { Node } from "pgpvis-core";
+// See comments on `PacketTab`.
+import { Node } from "../../../../pgpvis-core/Cargo.toml";
 
 const props = defineProps<{ node: Node; depth: number }>();
 

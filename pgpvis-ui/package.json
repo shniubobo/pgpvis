@@ -3,12 +3,12 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "bootstrap": "vite -c vite.config.bootstrap.ts build",
     "lint": "eslint && prettier --check . && pnpm type-check",
     "test": "vitest run",
     "dev": "vite",
     "preview": "vite preview",
-    "dist": "run-p type-check \"build-only {@}\" --",
-    "build-only": "vite build",
+    "dist": "vite build",
     "type-check": "vue-tsc --build",
     "clean": "rm -rf ./dist/"
   },
@@ -17,7 +17,6 @@
     "@heroicons/vue": "^2.2.0",
     "@tanstack/vue-virtual": "^3.13.6",
     "@vueuse/core": "^13.1.0",
-    "pgpvis-core": "workspace:../pgpvis-core/pkg",
     "vue": "^3.5.13"
   },
   "devDependencies": {
@@ -31,12 +30,13 @@
     "@vitejs/plugin-vue": "^5.2.1",
     "@vue/test-utils": "^2.4.6",
     "@vue/tsconfig": "^0.7.0",
+    "@wasm-tool/rollup-plugin-rust": "^3.0.4",
+    "binaryen": "^121.0.0",
     "eslint": "^9.25.1",
     "eslint-config-prettier": "^10.1.2",
     "eslint-plugin-vue": "^10.0.0",
     "globals": "^16.0.0",
     "jsdom": "^26.1.0",
-    "npm-run-all2": "^7.0.1",
     "prettier": "3.5.3",
     "prettier-plugin-tailwindcss": "^0.6.9",
     "tailwindcss": "^4.1.4",
@@ -45,7 +45,6 @@
     "vite": "^6.3.2",
     "vite-plugin-top-level-await": "^1.4.4",
     "vite-plugin-vue-devtools": "^7.7.5",
-    "vite-plugin-wasm": "^3.4.1",
     "vitest": "^3.1.2",
     "vue-tsc": "^2.2.10"
   }

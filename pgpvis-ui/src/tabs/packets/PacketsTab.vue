@@ -1,5 +1,11 @@
 <script setup lang="ts">
-import { Node } from "pgpvis-core";
+// The vscode plugin can understand `@pgpvis-core`, but `vue-tsc` won't, for
+// some files. At the time of writing, those files include this one, `InputTab`
+// and `NodeTree`. The reason is unknown.
+//
+// TODO: Figure out the reason.
+import { Node } from "../../../../pgpvis-core/Cargo.toml";
+
 import NodeTree from "./NodeTree.vue";
 
 const props = defineProps<{ nodes: Node[] }>();

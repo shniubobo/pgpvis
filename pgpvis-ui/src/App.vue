@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from "vue";
 
-import { Node } from "pgpvis-core";
+import { Node } from "@pgpvis-core";
 
 import HexViewTab from "./tabs/hex-view/HexViewTab.vue";
 import InputTab from "./tabs/InputTab.vue";

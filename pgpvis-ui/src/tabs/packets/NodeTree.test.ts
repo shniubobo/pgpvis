@@ -3,7 +3,7 @@ import { useEventBus } from "@vueuse/core";
 import { test as base_test, type Mock } from "vitest";
 
 // Turns out that we don't even need `vi.mock` when using this.
-import { Node as MockedNode } from "@mocks/pgpvis-core";
+import { Node as MockedNode } from "@mocks/@pgpvis-core";
 import NodeTree from "./NodeTree.vue";
 
 interface Fixtures {

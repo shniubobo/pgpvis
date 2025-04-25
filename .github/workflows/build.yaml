@@ -29,9 +29,9 @@ jobs:
       - uses: ./.github/actions/setup
 
       # Required to lint and test `pgpvis-ui`
-      - name: Build `pgpvis-core`
+      - name: Generate `pgpvis_core.d.ts`
         run: |
-          pnpm -F pgpvis-core build
+          pnpm bootstrap
 
       - name: Lint
         run: |
