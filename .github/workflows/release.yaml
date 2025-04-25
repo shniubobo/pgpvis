@@ -10,7 +10,6 @@ on:
 jobs:
   prepare-release:
     name: Prepare for release
-    environment: awaiting-signature
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
