@@ -3,6 +3,7 @@ import rust from "@wasm-tool/rollup-plugin-rust";
 import { defineConfig } from "vite";
 
 export default defineConfig({
+  mode: "development",
   plugins: [
     rust({
       extraArgs: {
@@ -18,9 +19,10 @@ export default defineConfig({
     }),
   ],
   build: {
+    outDir: "../target/pgpvis-core-bootstrapping",
     rollupOptions: {
       input: {
-        to_bootstrap: "../pgpvis-core/Cargo.toml",
+        pgpvis_core_bootstrapping: "../pgpvis-core/Cargo.toml",
       },
     },
   },

@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "bootstrap": "vite -c vite.config.bootstrap.ts build",
+    "bootstrap": "NODE_ENV=development vite -c vite.config.bootstrap.ts build",
     "lint": "eslint && prettier --check . && pnpm type-check",
     "test": "vitest run",
     "dev": "vite",
