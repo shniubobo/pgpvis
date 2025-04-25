@@ -11,9 +11,15 @@ import vueDevTools from "vite-plugin-vue-devtools";
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [
+    // https://github.com/wasm-tool/rollup-plugin-rust/
     rust({
+      verbose: process.env.CI === "true",
       extraArgs: {
         wasmBindgen: ["--remove-producers-section"],
+      },
+      optimize: {
+        // We are already specifying optimization options via `Cargo.toml`.
+        rustc: false,
       },
       experimental: {
         typescriptDeclarationDir: "../target/rollup-plugin-rust/",
