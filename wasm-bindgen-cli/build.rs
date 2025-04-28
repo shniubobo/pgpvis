@@ -1,4 +1,3 @@
-#[cfg(all(feature = "wasm-bindgen-cli", not(target_family = "wasm")))]
 fn main() {
     use std::path::Path;
 
@@ -12,6 +11,3 @@ fn main() {
     };
     std::fs::copy(wasm_bindgen_dir, target_dir.join("wasm-bindgen")).unwrap();
 }
-
-#[cfg(any(not(feature = "wasm-bindgen-cli"), target_family = "wasm"))]
-fn main() {}
