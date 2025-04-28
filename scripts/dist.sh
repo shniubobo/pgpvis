@@ -27,7 +27,8 @@ echo "============================================================"
 
 mkdir -p "$dist_dir"
 pnpm clean
-pnpm -F pgpvis-core dist:wasm-bindgen
+# Build `wasm-bindgen-cli`
+cargo check -p wasm-bindgen-cli-bin --release
 VITE_PGPVIS_VERSION="$version" pnpm dist
 
 echo "============================================================"

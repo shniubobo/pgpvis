@@ -1,0 +1,7 @@
+[package]
+name = "wasm-bindgen-cli-bin"
+edition = "2021"
+publish = false
+
+[build-dependencies]
+wasm-bindgen-cli = { version = "0.2.100", artifact = ["bin:wasm-bindgen"] }
