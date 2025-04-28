@@ -3,7 +3,10 @@ version: 2
 updates:
   - package-ecosystem: cargo
     directories:
-      - "**/*"
+      # Do NOT use "**/*", or `/wasm-bindgen-cli` will be included,
+      # which breaks dependabot.
+      - "/"
+      - "/pgpvis-core"
     schedule:
       interval: weekly
     # Stop dependabot from spamming
