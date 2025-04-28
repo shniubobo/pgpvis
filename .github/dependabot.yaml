@@ -6,6 +6,7 @@ updates:
       # Do NOT use "**/*", or `/wasm-bindgen-cli` will be included,
       # which breaks dependabot.
       - "/"
+      - "/.cargo"
       - "/pgpvis-core"
     schedule:
       interval: weekly
