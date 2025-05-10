@@ -382,6 +382,16 @@ impl Convert<pgp::packet::Key<pgp_key::PublicParts, pgp_key::PrimaryRole>> for P
                         key_id,
                     ))
                 }
+                pgp::types::PublicKeyAlgorithm::Ed25519 => {
+                    let key_material = Ed25519::convert_spanned(from.mpis(), converter)?;
+                    Self::Version4Ed25519(PublicVersion4::new(
+                        version_span,
+                        creation_time,
+                        algorithm_span,
+                        key_material,
+                        key_id,
+                    ))
+                }
                 _ => return Err(Error::Unimplemented),
             };
             return Ok(ret);
@@ -405,6 +415,16 @@ impl Convert<pgp::packet::Key<pgp_key::PublicParts, pgp_key::SubordinateRole>> f
                 pgp::types::PublicKeyAlgorithm::RSAEncryptSign => {
                     let key_material = RsaEncryptSign::convert_spanned(from.mpis(), converter)?;
                     Self::Version4RsaEncryptSign(PublicVersion4::new(
+                        version_span,
+                        creation_time,
+                        algorithm_span,
+                        key_material,
+                        key_id,
+                    ))
+                }
+                pgp::types::PublicKeyAlgorithm::Ed25519 => {
+                    let key_material = Ed25519::convert_spanned(from.mpis(), converter)?;
+                    Self::Version4Ed25519(PublicVersion4::new(
                         version_span,
                         creation_time,
                         algorithm_span,
@@ -459,6 +479,22 @@ impl Convert<pgp::crypto::mpi::PublicKey> for RsaEncryptSign {
             let n = Mpi::convert_spanned(n, converter)?;
             let e = Mpi::convert_spanned(e, converter)?;
             return Ok(RsaEncryptSign::new(n, e));
+        }
+
+        Err(Error::WrongPublicKeyAlgorithm {
+            expected: Self::ID,
+            got: from
+                .algo()
+                // Returning 0 since we cannot get the exact id here.
+                .unwrap_or(pgp::types::PublicKeyAlgorithm::Unknown(0)),
+        })
+    }
+}
+
+impl Convert<pgp::crypto::mpi::PublicKey> for Ed25519 {
+    fn convert(from: &pgp::crypto::mpi::PublicKey, converter: &mut Converter) -> Result<Self> {
+        if let pgp::crypto::mpi::PublicKey::Ed25519 { a } = from {
+            return Ok(Ed25519(converter.next_span_with(*a)?));
         }
 
         Err(Error::WrongPublicKeyAlgorithm {
@@ -697,6 +733,12 @@ mod tests {
                 e: pgp::crypto::mpi::MPI::new(&[4]),
                 n: pgp::crypto::mpi::MPI::new(&[1, 2, 3]),
             } => 4 @ RsaEncryptSign
+        }
+
+        ed25519 {
+            pgp::crypto::mpi::PublicKey::Ed25519 {
+                a: [0u8; 32],
+            } => 1 @ Ed25519
         }
 
         mpi {
