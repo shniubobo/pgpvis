@@ -1,0 +1,24 @@
+---
+source: pgpvis-core/src/convert.rs
+expression: value
+---
+offset: 0
+length: 11
+inner:
+  version:
+    offset: 0
+    length: 1
+    inner: 4
+  creation_time:
+    offset: 1
+    length: 1
+    inner: 0
+  algorithm:
+    offset: 2
+    length: 1
+    inner: 100
+  key_material:
+    offset: 3
+    length: 8
+    inner: ~
+  key_id: CF7BEA41A70E0343

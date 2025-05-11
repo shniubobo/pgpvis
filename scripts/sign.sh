@@ -22,7 +22,7 @@ echo "Signing $tar_file"
 echo "============================================================"
 
 if [[ ! -f $tar_file ]]; then
-    echo "$tar_file does not exist. Download from CI and place it in $dist_dir"
+    echo "$tar_file does not exist. Run dist.sh first."
     exit 1
 fi
 

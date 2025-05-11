@@ -190,7 +190,7 @@ impl Convert<PacketParser<'_>> for AnyPacket {
                     while converter.next_span().is_ok() {}
                     Ok(())
                 })?;
-                return Err(Error::UnknownPacket {
+                return Err(Error::UnimplementedPacket {
                     type_id: unknown_packet.tag().into(),
                     span,
                 });
@@ -254,7 +254,7 @@ where
     }
 
     pub fn from_legacy(_ctb: &pgp::packet::header::CTB) -> Result<Self> {
-        Err(Error::Unimplemented)
+        Err(Error::Unimplemented("OpenPgpCtb::from_legacy".to_string()))
     }
 }
 
@@ -282,7 +282,7 @@ where
     T: PacketType,
 {
     pub fn from_openpgp(_ctb: &pgp::packet::header::CTB) -> Result<Self> {
-        Err(Error::Unimplemented)
+        Err(Error::Unimplemented("LegacyCtb::from_openpgp".to_string()))
     }
 
     pub fn from_legacy(ctb: &pgp::packet::header::CTB) -> Result<Self> {
@@ -361,64 +361,80 @@ where
     }
 }
 
-impl Convert<pgp::packet::Key<pgp_key::PublicParts, pgp_key::PrimaryRole>> for PublicKey {
-    fn convert(
-        from: &pgp::packet::Key<pgp_key::PublicParts, pgp_key::PrimaryRole>,
-        converter: &mut Converter,
-    ) -> Result<Self> {
-        if let pgp::packet::Key::V4(key) = from {
-            let version_span = converter.next_span()?;
-            let creation_time = Time::convert_spanned(from, converter)?;
-            let algorithm_span = converter.next_span()?;
-            let key_id = from.keyid().to_hex();
+macro_rules! convert_key {
+    { $conversion:tt } => {
+        impl Convert<pgp::packet::Key<pgp_key::PublicParts, pgp_key::PrimaryRole>> for PublicKey {
+            fn convert(
+                from: &pgp::packet::Key<pgp_key::PublicParts, pgp_key::PrimaryRole>,
+                converter: &mut Converter,
+            ) -> Result<Self> {
+                convert_key! { from, converter $conversion }
+            }
+        }
+
+        impl Convert<pgp::packet::Key<pgp_key::PublicParts, pgp_key::SubordinateRole>>
+            for PublicSubkey
+        {
+            fn convert(
+                from: &pgp::packet::Key<pgp_key::PublicParts, pgp_key::SubordinateRole>,
+                converter: &mut Converter,
+            ) -> Result<Self> {
+                convert_key! { from, converter $conversion }
+            }
+        }
+    };
+
+    {
+        $from:ident, $converter:ident {
+            $($from_inner:ident => $to:ident ( $to_inner:ty ) );+ $(;)?
+        }
+    } => {
+        if let pgp::packet::Key::V4(key) = $from {
+            let version_span = $converter.next_span()?;
+            let creation_time = Time::convert_spanned($from, $converter)?;
+            let algorithm_span = $converter.next_span()?;
+            let key_id = $from.keyid().to_hex();
             let ret = match key.pk_algo() {
-                pgp::types::PublicKeyAlgorithm::RSAEncryptSign => {
-                    let key_material = RsaEncryptSign::convert_spanned(from.mpis(), converter)?;
-                    Self::Version4RsaEncryptSign(PublicVersion4::new(
-                        version_span,
-                        creation_time,
-                        algorithm_span,
-                        key_material,
-                        key_id,
-                    ))
-                }
-                _ => return Err(Error::Unimplemented),
+                $(
+                    pgp::types::PublicKeyAlgorithm::$from_inner => {
+                        let key_material = <$to_inner>::convert_spanned($from.mpis(), $converter)?;
+                        Self::$to(PublicVersion4::new(
+                            version_span,
+                            creation_time,
+                            algorithm_span,
+                            key_material,
+                            key_id,
+                        ))
+                    }
+                )+
+                _ => {
+                    let key_material = $converter.spanned(|converter| {
+                        // Exhaust all remaining spans.
+                        while let Ok(_) = converter.next_span() {}
+                        Ok(UnimplementedPublicKeyAlgorithm)
+                    })?;
+                    Self::Version4Unimplemented(
+                        PublicVersion4::new(
+                            version_span,
+                            creation_time,
+                            algorithm_span,
+                            key_material,
+                            key_id,
+                        )
+                    )
+                },
             };
             return Ok(ret);
         };
-        Err(Error::Unimplemented)
-    }
+        Err(Error::Unimplemented(format!("version {}", $from.version())))
+    };
 }
 
-impl Convert<pgp::packet::Key<pgp_key::PublicParts, pgp_key::SubordinateRole>> for PublicSubkey {
-    fn convert(
-        from: &pgp::packet::Key<pgp_key::PublicParts, pgp_key::SubordinateRole>,
-        converter: &mut Converter,
-    ) -> Result<Self> {
-        // Exactly the same as `PublicKey`'s implementation; maybe should be deduplicated.
-        if let pgp::packet::Key::V4(key) = from {
-            let version_span = converter.next_span()?;
-            let creation_time = Time::convert_spanned(from, converter)?;
-            let algorithm_span = converter.next_span()?;
-            let key_id = from.keyid().to_hex();
-            let ret = match key.pk_algo() {
-                pgp::types::PublicKeyAlgorithm::RSAEncryptSign => {
-                    let key_material = RsaEncryptSign::convert_spanned(from.mpis(), converter)?;
-                    Self::Version4RsaEncryptSign(PublicVersion4::new(
-                        version_span,
-                        creation_time,
-                        algorithm_span,
-                        key_material,
-                        key_id,
-                    ))
-                }
-                _ => return Err(Error::Unimplemented),
-            };
-            return Ok(ret);
-        };
-        Err(Error::Unimplemented)
-    }
-}
+convert_key! {{
+    RSAEncryptSign => Version4RsaEncryptSign(RsaEncryptSign);
+    EdDSA => Version4EdDsaLegacy(EdDsaLegacy);
+    Ed25519 => Version4Ed25519(Ed25519);
+}}
 
 impl<R> Convert<pgp::packet::Key<pgp_key::PublicParts, R>> for Time
 where
@@ -471,6 +487,40 @@ impl Convert<pgp::crypto::mpi::PublicKey> for RsaEncryptSign {
     }
 }
 
+impl Convert<pgp::crypto::mpi::PublicKey> for EdDsaLegacy {
+    fn convert(from: &pgp::crypto::mpi::PublicKey, converter: &mut Converter) -> Result<Self> {
+        if let pgp::crypto::mpi::PublicKey::EdDSA { curve, q } = from {
+            let curve_oid = CurveOid::convert_spanned(curve, converter)?;
+            let q = Mpi::convert_spanned(q, converter)?;
+            return Ok(Self::new(curve_oid, q));
+        }
+
+        Err(Error::WrongPublicKeyAlgorithm {
+            expected: Self::ID,
+            got: from
+                .algo()
+                // Returning 0 since we cannot get the exact id here.
+                .unwrap_or(pgp::types::PublicKeyAlgorithm::Unknown(0)),
+        })
+    }
+}
+
+impl Convert<pgp::crypto::mpi::PublicKey> for Ed25519 {
+    fn convert(from: &pgp::crypto::mpi::PublicKey, converter: &mut Converter) -> Result<Self> {
+        if let pgp::crypto::mpi::PublicKey::Ed25519 { a } = from {
+            return Ok(Ed25519(converter.next_span_with(*a)?));
+        }
+
+        Err(Error::WrongPublicKeyAlgorithm {
+            expected: Self::ID,
+            got: from
+                .algo()
+                // Returning 0 since we cannot get the exact id here.
+                .unwrap_or(pgp::types::PublicKeyAlgorithm::Unknown(0)),
+        })
+    }
+}
+
 impl Convert<pgp::crypto::mpi::MPI> for Mpi {
     fn convert(from: &pgp::crypto::mpi::MPI, converter: &mut Converter) -> Result<Self> {
         let length_field = from.bits();
@@ -480,6 +530,41 @@ impl Convert<pgp::crypto::mpi::MPI> for Mpi {
         let length_field_span = converter.next_span_with(length_field as u16)?;
         let integers_span = converter.next_span_with(from.value().to_vec())?;
         Ok(Mpi::new(length_field_span, integers_span))
+    }
+}
+
+impl Convert<pgp::crypto::Curve> for CurveOid {
+    fn convert(from: &pgp::crypto::Curve, converter: &mut Converter) -> Result<Self>
+    where
+        Self: Sized,
+    {
+        Ok(CurveOid::new(
+            from.try_into()?,
+            // This cast should be okay, as long as sequoia-openpgp is not
+            // mal-functioning.
+            //
+            // TODO: Add an overflow check as we have done for `Mpi` and `Time`.
+            converter.next_span_with(from.oid().len() as u8)?,
+            converter.next_span_with(from.oid().to_vec())?,
+        ))
+    }
+}
+
+impl TryFrom<&pgp::crypto::Curve> for CurveName {
+    type Error = Error;
+
+    fn try_from(value: &pgp::crypto::Curve) -> StdResult<Self, Self::Error> {
+        Ok(match value {
+            pgp::types::Curve::NistP256 => Self::NistP256,
+            pgp::types::Curve::NistP384 => Self::NistP384,
+            pgp::types::Curve::NistP521 => Self::NistP521,
+            pgp::types::Curve::BrainpoolP256 => Self::BrainpoolP256R1,
+            pgp::types::Curve::BrainpoolP384 => Self::BrainpoolP384R1,
+            pgp::types::Curve::BrainpoolP512 => Self::BrainpoolP512R1,
+            pgp::types::Curve::Ed25519 => Self::Ed25519Legacy,
+            pgp::types::Curve::Cv25519 => Self::Curve25519Legacy,
+            curve => return Err(Self::Error::Unimplemented(curve.to_string())),
+        })
     }
 }
 
@@ -651,7 +736,8 @@ mod tests {
             () => 1 @ Body<DummyPacket>
         }
 
-        public_key_version_4_rsa_encrypt_sign {
+        // Each algorithm is tested in its own test.
+        public_key_version_4 {
             pgp::packet::Key::V4(
                 pgp::packet::key::Key4::<_, pgp::packet::key::PrimaryRole>::new(
                     SystemTime::UNIX_EPOCH,
@@ -699,14 +785,58 @@ mod tests {
             } => 4 @ RsaEncryptSign
         }
 
+        eddsa_legacy {
+            pgp::crypto::mpi::PublicKey::EdDSA {
+                curve: pgp::crypto::Curve::Ed25519,
+                q: pgp::crypto::mpi::MPI::new(&[1, 2, 3]),
+            } => 4 @ EdDsaLegacy
+        }
+
+        ed25519 {
+            pgp::crypto::mpi::PublicKey::Ed25519 {
+                a: [0u8; 32],
+            } => 1 @ Ed25519
+        }
+
         mpi {
             pgp::crypto::mpi::MPI::new(&[1, 2, 3]) => 2 @ Mpi
+        }
+
+        curve_oid {
+            pgp::crypto::Curve::Ed25519 => 2 @ CurveOid
         }
 
         user_id {
             pgp::packet::UserID::from_address(Some("John"), None, "john@example.com").unwrap()
                 => 1 @ UserId
         }
+    }
+
+    #[test]
+    fn public_key_version_4_unimplemented() {
+        let mut context = Context::new();
+        let mut converter = Converter::new(&mut context, vec![1; 11]);
+
+        // Use DSA for this as we won't implement it anytime soon.
+        let from = pgp::packet::Key::V4(
+            pgp::packet::key::Key4::<_, pgp::packet::key::PrimaryRole>::new(
+                SystemTime::UNIX_EPOCH,
+                #[expect(deprecated)]
+                pgp::types::PublicKeyAlgorithm::DSA,
+                pgp::crypto::mpi::PublicKey::DSA {
+                    p: pgp::crypto::mpi::MPI::new(&[0]),
+                    q: pgp::crypto::mpi::MPI::new(&[1]),
+                    g: pgp::crypto::mpi::MPI::new(&[2]),
+                    y: pgp::crypto::mpi::MPI::new(&[3]),
+                },
+            )
+            .unwrap(),
+        );
+        let value = PublicKey::convert_spanned(&from, &mut converter).unwrap();
+
+        // Check all spans have been exhausted.
+        assert!(converter.next_span().is_err());
+        insta_assert!(value);
     }
 
     #[test]

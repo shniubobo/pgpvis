@@ -81,11 +81,11 @@ fn parse(options: ParseOptions, message: &[u8]) -> Result<ParseOutput> {
         // TODO: Replace the `or_else` call with `?` after we remove
         // `AnyPacket::Unknown` and `Error::UnknownPacket`.
         let packet = converter.convert(&parser).or_else(|err| {
-            if let Error::UnknownPacket { span, .. } = err {
+            if let Error::UnimplementedPacket { span, .. } = err {
                 Ok(Span {
                     offset: span.offset,
                     length: span.length,
-                    inner: AnyPacket::Unknown,
+                    inner: AnyPacket::Unimplemented,
                 })
             } else {
                 Err(err)
