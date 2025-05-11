@@ -478,7 +478,7 @@ impl RsaEncryptSign {
 }
 
 #[derive(Clone, Debug, Display, PartialEq, Eq, Serialize)]
-#[display("EdDSALegacy (deprecated) - {}", curve_oid.inner)]
+#[display("EdDSALegacy (deprecated)")]
 pub struct EdDsaLegacy {
     // Should always be the one representing Ed25519Legacy.
     pub curve_oid: Span<CurveOid>,
@@ -763,7 +763,7 @@ mod tests {
                 ),
                 q: dummy_span!(dummy_mpi!()),
             }
-        } => "EdDSALegacy (deprecated) - Ed25519Legacy"
+        } => "EdDSALegacy (deprecated)"
 
         ed25519 {
             Ed25519(dummy_span!([0; 32]))
