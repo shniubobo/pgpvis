@@ -372,6 +372,17 @@ impl RenderRootlessly for EdDsaLegacy {
     }
 }
 
+impl RenderRootlessly for X25519 {
+    // *No root node*
+    //   [[32 octets]]
+    fn render_rootlessly(&self) -> RootlessNode {
+        RootlessNode {
+            // Always 32, could be hard-coded.
+            children: vec![self.0.to_node(format!("[{} octets]", self.0.inner.len()))],
+        }
+    }
+}
+
 impl RenderRootlessly for Ed25519 {
     // *No root node*
     //   [[32 octets]]
@@ -769,6 +780,16 @@ mod tests {
                 integers: spans.next(vec![0; 2]),
             }),
         };
+
+        let node = node.render_rootlessly();
+        insta_assert!(node);
+    }
+
+    #[test]
+    fn x25519() {
+        let spans = SelfIncrementingDummySpan::new();
+
+        let node = X25519(spans.next([0; 32]));
 
         let node = node.render_rootlessly();
         insta_assert!(node);

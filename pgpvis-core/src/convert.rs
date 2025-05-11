@@ -469,6 +469,18 @@ impl TryFrom<SystemTime> for Time {
     }
 }
 
+macro_rules! err_wrong_algorithm {
+    ( $from:ident ) => {
+        Err(Error::WrongPublicKeyAlgorithm {
+            expected: Self::ID,
+            got: $from
+                .algo()
+                // Returning 0 since we cannot get the exact id here.
+                .unwrap_or(pgp::types::PublicKeyAlgorithm::Unknown(0)),
+        })
+    };
+}
+
 impl Convert<pgp::crypto::mpi::PublicKey> for RsaEncryptSign {
     fn convert(from: &pgp::crypto::mpi::PublicKey, converter: &mut Converter) -> Result<Self> {
         if let pgp::crypto::mpi::PublicKey::RSA { e, n } = from {
@@ -477,13 +489,7 @@ impl Convert<pgp::crypto::mpi::PublicKey> for RsaEncryptSign {
             return Ok(RsaEncryptSign::new(n, e));
         }
 
-        Err(Error::WrongPublicKeyAlgorithm {
-            expected: Self::ID,
-            got: from
-                .algo()
-                // Returning 0 since we cannot get the exact id here.
-                .unwrap_or(pgp::types::PublicKeyAlgorithm::Unknown(0)),
-        })
+        err_wrong_algorithm!(from)
     }
 }
 
@@ -495,13 +501,17 @@ impl Convert<pgp::crypto::mpi::PublicKey> for EdDsaLegacy {
             return Ok(Self::new(curve_oid, q));
         }
 
-        Err(Error::WrongPublicKeyAlgorithm {
-            expected: Self::ID,
-            got: from
-                .algo()
-                // Returning 0 since we cannot get the exact id here.
-                .unwrap_or(pgp::types::PublicKeyAlgorithm::Unknown(0)),
-        })
+        err_wrong_algorithm!(from)
+    }
+}
+
+impl Convert<pgp::crypto::mpi::PublicKey> for X25519 {
+    fn convert(from: &pgp::crypto::mpi::PublicKey, converter: &mut Converter) -> Result<Self> {
+        if let pgp::crypto::mpi::PublicKey::X25519 { u } = from {
+            return Ok(X25519(converter.next_span_with(*u)?));
+        }
+
+        err_wrong_algorithm!(from)
     }
 }
 
@@ -511,13 +521,7 @@ impl Convert<pgp::crypto::mpi::PublicKey> for Ed25519 {
             return Ok(Ed25519(converter.next_span_with(*a)?));
         }
 
-        Err(Error::WrongPublicKeyAlgorithm {
-            expected: Self::ID,
-            got: from
-                .algo()
-                // Returning 0 since we cannot get the exact id here.
-                .unwrap_or(pgp::types::PublicKeyAlgorithm::Unknown(0)),
-        })
+        err_wrong_algorithm!(from)
     }
 }
 
@@ -790,6 +794,12 @@ mod tests {
                 curve: pgp::crypto::Curve::Ed25519,
                 q: pgp::crypto::mpi::MPI::new(&[1, 2, 3]),
             } => 4 @ EdDsaLegacy
+        }
+
+        x25519 {
+            pgp::crypto::mpi::PublicKey::X25519 {
+                u: [0u8; 32],
+            } => 1 @ X25519
         }
 
         ed25519 {

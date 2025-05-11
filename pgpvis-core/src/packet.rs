@@ -460,6 +460,7 @@ macro_rules! gen_public_key_algorithm_enums_and_impls {
 gen_public_key_algorithm_enums_and_impls! {
     RsaEncryptSign = 1,
     EdDsaLegacy = 22,
+    X25519 = 25,
     Ed25519 = 27,
     UnimplementedPublicKeyAlgorithm = 100,
 }
@@ -491,6 +492,10 @@ impl EdDsaLegacy {
         Self { curve_oid, q }
     }
 }
+
+#[derive(Clone, Copy, Debug, Display, PartialEq, Eq, Serialize)]
+#[display("X25519")]
+pub struct X25519(pub Span<[u8; 32]>);
 
 #[derive(Clone, Copy, Debug, Display, PartialEq, Eq, Serialize)]
 #[display("Ed25519")]
@@ -764,6 +769,10 @@ mod tests {
                 q: dummy_span!(dummy_mpi!()),
             }
         } => "EdDSALegacy (deprecated)"
+
+        x25519 {
+            X25519(dummy_span!([0; 32]))
+        } => "X25519"
 
         ed25519 {
             Ed25519(dummy_span!([0; 32]))
