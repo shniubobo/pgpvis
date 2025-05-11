@@ -52,8 +52,8 @@ pub enum Error {
     // gets implemented.
     /// An error returned when something is not yet implemented, but it's not
     /// feasible to call [`unimplemented!`].
-    #[error("not yet implemented")]
-    Unimplemented,
+    #[error("not yet implemented: {}", .0)]
+    Unimplemented(String),
 
     // TODO: Remove this after we've implemented all packet types.
     #[error("unimplemented packet at span {span}; type id: {type_id}")]

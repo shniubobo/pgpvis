@@ -254,7 +254,7 @@ where
     }
 
     pub fn from_legacy(_ctb: &pgp::packet::header::CTB) -> Result<Self> {
-        Err(Error::Unimplemented)
+        Err(Error::Unimplemented("OpenPgpCtb::from_legacy".to_string()))
     }
 }
 
@@ -282,7 +282,7 @@ where
     T: PacketType,
 {
     pub fn from_openpgp(_ctb: &pgp::packet::header::CTB) -> Result<Self> {
-        Err(Error::Unimplemented)
+        Err(Error::Unimplemented("LegacyCtb::from_openpgp".to_string()))
     }
 
     pub fn from_legacy(ctb: &pgp::packet::header::CTB) -> Result<Self> {
@@ -407,11 +407,11 @@ macro_rules! convert_key {
                         ))
                     }
                 )+
-                _ => return Err(Error::Unimplemented),
+                key => return Err(Error::Unimplemented(format!("{:#}", key))),
             };
             return Ok(ret);
         };
-        Err(Error::Unimplemented)
+        Err(Error::Unimplemented(format!("version {}", $from.version())))
     };
 }
 
@@ -548,7 +548,7 @@ impl TryFrom<&pgp::crypto::Curve> for CurveName {
             pgp::types::Curve::BrainpoolP512 => Self::BrainpoolP512R1,
             pgp::types::Curve::Ed25519 => Self::Ed25519Legacy,
             pgp::types::Curve::Cv25519 => Self::Curve25519Legacy,
-            _ => return Err(Self::Error::Unimplemented),
+            curve => return Err(Self::Error::Unimplemented(curve.to_string())),
         })
     }
 }
