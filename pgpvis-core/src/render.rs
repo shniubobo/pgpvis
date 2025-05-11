@@ -267,6 +267,7 @@ impl RenderRootlessly for PublicKey {
             Self::Version4RsaEncryptSign(inner) => inner.render_rootlessly(),
             Self::Version4EdDsaLegacy(inner) => inner.render_rootlessly(),
             Self::Version4Ed25519(inner) => inner.render_rootlessly(),
+            Self::Version4Unimplemented(inner) => inner.render_rootlessly(),
         }
     }
 }
@@ -279,6 +280,7 @@ impl RenderRootlessly for PublicSubkey {
             Self::Version4RsaEncryptSign(inner) => inner.render_rootlessly(),
             Self::Version4EdDsaLegacy(inner) => inner.render_rootlessly(),
             Self::Version4Ed25519(inner) => inner.render_rootlessly(),
+            Self::Version4Unimplemented(inner) => inner.render_rootlessly(),
         }
     }
 }
@@ -377,6 +379,16 @@ impl RenderRootlessly for Ed25519 {
         RootlessNode {
             // Always 32, could be hard-coded.
             children: vec![self.0.to_node(format!("[{} octets]", self.0.inner.len()))],
+        }
+    }
+}
+
+impl RenderRootlessly for UnimplementedPublicKeyAlgorithm {
+    // *No root node*
+    //   Unimplemented
+    fn render_rootlessly(&self) -> RootlessNode {
+        RootlessNode {
+            children: vec![Node::with_text("Unimplemented".to_string())],
         }
     }
 }
@@ -769,6 +781,12 @@ mod tests {
         let node = Ed25519(spans.next([0; 32]));
 
         let node = node.render_rootlessly();
+        insta_assert!(node);
+    }
+
+    #[test]
+    fn unimplemented_public_key_algorithm() {
+        let node = UnimplementedPublicKeyAlgorithm.render_rootlessly();
         insta_assert!(node);
     }
 

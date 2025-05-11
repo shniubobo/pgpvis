@@ -291,6 +291,7 @@ pub enum PublicKey {
     Version4RsaEncryptSign(PublicVersion4<Key, RsaEncryptSign>),
     Version4EdDsaLegacy(PublicVersion4<Key, EdDsaLegacy>),
     Version4Ed25519(PublicVersion4<Key, Ed25519>),
+    Version4Unimplemented(PublicVersion4<Key, UnimplementedPublicKeyAlgorithm>),
 }
 
 /// Enum for every kind of public subkeys, each variant being a combination of
@@ -303,6 +304,7 @@ pub enum PublicSubkey {
     Version4RsaEncryptSign(PublicVersion4<Subkey, RsaEncryptSign>),
     Version4EdDsaLegacy(PublicVersion4<Subkey, EdDsaLegacy>),
     Version4Ed25519(PublicVersion4<Subkey, Ed25519>),
+    Version4Unimplemented(PublicVersion4<Subkey, UnimplementedPublicKeyAlgorithm>),
 }
 
 /// The public part of a version 4 key or subkey.
@@ -459,6 +461,7 @@ gen_public_key_algorithm_enums_and_impls! {
     RsaEncryptSign = 1,
     EdDsaLegacy = 22,
     Ed25519 = 27,
+    UnimplementedPublicKeyAlgorithm = 100,
 }
 
 #[derive(Clone, Debug, Display, PartialEq, Eq, Serialize)]
@@ -492,6 +495,10 @@ impl EdDsaLegacy {
 #[derive(Clone, Copy, Debug, Display, PartialEq, Eq, Serialize)]
 #[display("Ed25519")]
 pub struct Ed25519(pub Span<[u8; 32]>);
+
+#[derive(Clone, Copy, Debug, Display, PartialEq, Eq, Serialize)]
+#[display("Unimplemented")]
+pub struct UnimplementedPublicKeyAlgorithm;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct Mpi {
@@ -761,6 +768,10 @@ mod tests {
         ed25519 {
             Ed25519(dummy_span!([0; 32]))
         } => "Ed25519"
+
+        unimplemented_public_key_algorithm {
+            UnimplementedPublicKeyAlgorithm
+        } => "Unimplemented"
 
         // Not testing exhaustively.
         curve_name_curve25519_legacy {

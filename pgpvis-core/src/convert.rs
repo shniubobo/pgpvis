@@ -407,7 +407,22 @@ macro_rules! convert_key {
                         ))
                     }
                 )+
-                key => return Err(Error::Unimplemented(format!("{:#}", key))),
+                _ => {
+                    let key_material = $converter.spanned(|converter| {
+                        // Exhaust all remaining spans.
+                        while let Ok(_) = converter.next_span() {}
+                        Ok(UnimplementedPublicKeyAlgorithm)
+                    })?;
+                    Self::Version4Unimplemented(
+                        PublicVersion4::new(
+                            version_span,
+                            creation_time,
+                            algorithm_span,
+                            key_material,
+                            key_id,
+                        )
+                    )
+                },
             };
             return Ok(ret);
         };
@@ -721,7 +736,8 @@ mod tests {
             () => 1 @ Body<DummyPacket>
         }
 
-        public_key_version_4_rsa_encrypt_sign {
+        // Each algorithm is tested in its own test.
+        public_key_version_4 {
             pgp::packet::Key::V4(
                 pgp::packet::key::Key4::<_, pgp::packet::key::PrimaryRole>::new(
                     SystemTime::UNIX_EPOCH,
@@ -794,6 +810,33 @@ mod tests {
             pgp::packet::UserID::from_address(Some("John"), None, "john@example.com").unwrap()
                 => 1 @ UserId
         }
+    }
+
+    #[test]
+    fn public_key_version_4_unimplemented() {
+        let mut context = Context::new();
+        let mut converter = Converter::new(&mut context, vec![1; 11]);
+
+        // Use DSA for this as we won't implement it anytime soon.
+        let from = pgp::packet::Key::V4(
+            pgp::packet::key::Key4::<_, pgp::packet::key::PrimaryRole>::new(
+                SystemTime::UNIX_EPOCH,
+                #[expect(deprecated)]
+                pgp::types::PublicKeyAlgorithm::DSA,
+                pgp::crypto::mpi::PublicKey::DSA {
+                    p: pgp::crypto::mpi::MPI::new(&[0]),
+                    q: pgp::crypto::mpi::MPI::new(&[1]),
+                    g: pgp::crypto::mpi::MPI::new(&[2]),
+                    y: pgp::crypto::mpi::MPI::new(&[3]),
+                },
+            )
+            .unwrap(),
+        );
+        let value = PublicKey::convert_spanned(&from, &mut converter).unwrap();
+
+        // Check all spans have been exhausted.
+        assert!(converter.next_span().is_err());
+        insta_assert!(value);
     }
 
     #[test]
