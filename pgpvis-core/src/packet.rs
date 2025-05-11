@@ -289,6 +289,7 @@ where
 #[non_exhaustive]
 pub enum PublicKey {
     Version4RsaEncryptSign(PublicVersion4<Key, RsaEncryptSign>),
+    Version4EdDsaLegacy(PublicVersion4<Key, EdDsaLegacy>),
     Version4Ed25519(PublicVersion4<Key, Ed25519>),
 }
 
@@ -300,6 +301,7 @@ pub enum PublicKey {
 #[non_exhaustive]
 pub enum PublicSubkey {
     Version4RsaEncryptSign(PublicVersion4<Subkey, RsaEncryptSign>),
+    Version4EdDsaLegacy(PublicVersion4<Subkey, EdDsaLegacy>),
     Version4Ed25519(PublicVersion4<Subkey, Ed25519>),
 }
 
@@ -455,6 +457,7 @@ macro_rules! gen_public_key_algorithm_enums_and_impls {
 
 gen_public_key_algorithm_enums_and_impls! {
     RsaEncryptSign = 1,
+    EdDsaLegacy = 22,
     Ed25519 = 27,
 }
 
@@ -468,6 +471,21 @@ pub struct RsaEncryptSign {
 impl RsaEncryptSign {
     pub fn new(n: Span<Mpi>, e: Span<Mpi>) -> Self {
         Self { n, e }
+    }
+}
+
+#[derive(Clone, Debug, Display, PartialEq, Eq, Serialize)]
+#[display("EdDSALegacy (deprecated) - {}", curve_oid.inner)]
+pub struct EdDsaLegacy {
+    // Should always be the one representing Ed25519Legacy.
+    pub curve_oid: Span<CurveOid>,
+    // Should be prefixed with `0x40` but we don't need to worry about that.
+    pub q: Span<Mpi>,
+}
+
+impl EdDsaLegacy {
+    pub fn new(curve_oid: Span<CurveOid>, q: Span<Mpi>) -> Self {
+        Self { curve_oid, q }
     }
 }
 
@@ -495,6 +513,55 @@ impl Time {
     pub fn new(secs_since_epoch: u32) -> Self {
         Self(secs_since_epoch)
     }
+}
+
+/// A representation of curve OID containing both its length and the actual OID.
+///
+/// This could have been implemented as (curve name omitted):
+///
+/// ```
+/// pub struct CurveOid<const L: u8> {
+///     pub length: Span<()>,
+///     pub oid: Span<[u8; L as usize]>,
+/// }
+/// ```
+///
+/// ..., and the `oid` could also be an enum. However, that would unnecessarily
+/// increase the implementation's complexity, and requires the unstable feature
+/// `generic_const_exprs`. So we are using this less-constant implementaion
+/// instead.
+#[derive(Clone, Debug, Display, PartialEq, Eq, Serialize)]
+#[display("{}", name)]
+pub struct CurveOid {
+    pub name: CurveName,
+    pub length: Span<u8>,
+    pub oid: Span<Vec<u8>>,
+}
+
+impl CurveOid {
+    pub fn new(name: CurveName, length: Span<u8>, oid: Span<Vec<u8>>) -> Self {
+        Self { name, length, oid }
+    }
+}
+
+#[derive(Copy, Clone, Debug, Display, PartialEq, Eq, Serialize)]
+pub enum CurveName {
+    #[display("NIST P-256")]
+    NistP256,
+    #[display("NIST P-384")]
+    NistP384,
+    #[display("NIST P-521")]
+    NistP521,
+    #[display("brainpoolP256r1")]
+    BrainpoolP256R1,
+    #[display("brainpoolP384r1")]
+    BrainpoolP384R1,
+    #[display("brainpoolP512r1")]
+    BrainpoolP512R1,
+    #[display("Ed25519Legacy")]
+    Ed25519Legacy,
+    #[display("Curve25519Legacy")]
+    Curve25519Legacy,
 }
 
 #[derive(Clone, Debug, Display, PartialEq, Eq, Serialize)]
@@ -677,9 +744,28 @@ mod tests {
             }
         } => "RSA (Encrypt or Sign)"
 
+        // `CurveOid` is also tested by this.
+        eddsa_legacy {
+            EdDsaLegacy {
+                curve_oid: dummy_span!(
+                    CurveOid {
+                        name: CurveName::Ed25519Legacy,
+                        length: dummy_span!(0),
+                        oid: dummy_span!(vec![]),
+                    }
+                ),
+                q: dummy_span!(dummy_mpi!()),
+            }
+        } => "EdDSALegacy (deprecated) - Ed25519Legacy"
+
         ed25519 {
             Ed25519(dummy_span!([0; 32]))
         } => "Ed25519"
+
+        // Not testing exhaustively.
+        curve_name_curve25519_legacy {
+            CurveName::Curve25519Legacy
+        } => "Curve25519Legacy"
 
         user_id {
             UserId { user_id: dummy_span!("a".to_string()) }

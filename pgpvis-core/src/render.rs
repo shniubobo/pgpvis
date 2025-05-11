@@ -264,8 +264,9 @@ impl RenderRootlessly for PublicKey {
     //   &[Body]
     fn render_rootlessly(&self) -> RootlessNode {
         match &self {
-            PublicKey::Version4RsaEncryptSign(inner) => inner.render_rootlessly(),
-            PublicKey::Version4Ed25519(inner) => inner.render_rootlessly(),
+            Self::Version4RsaEncryptSign(inner) => inner.render_rootlessly(),
+            Self::Version4EdDsaLegacy(inner) => inner.render_rootlessly(),
+            Self::Version4Ed25519(inner) => inner.render_rootlessly(),
         }
     }
 }
@@ -275,8 +276,9 @@ impl RenderRootlessly for PublicSubkey {
     //   &[Body]
     fn render_rootlessly(&self) -> RootlessNode {
         match &self {
-            PublicSubkey::Version4RsaEncryptSign(inner) => inner.render_rootlessly(),
-            PublicSubkey::Version4Ed25519(inner) => inner.render_rootlessly(),
+            Self::Version4RsaEncryptSign(inner) => inner.render_rootlessly(),
+            Self::Version4EdDsaLegacy(inner) => inner.render_rootlessly(),
+            Self::Version4Ed25519(inner) => inner.render_rootlessly(),
         }
     }
 }
@@ -354,6 +356,31 @@ impl RenderRootlessly for RsaEncryptSign {
     }
 }
 
+impl RenderRootlessly for EdDsaLegacy {
+    // *No root node*
+    //   &[Curve OID]
+    //   &[MPI] -> Q (MPI)
+    fn render_rootlessly(&self) -> RootlessNode {
+        let curve_oid = self.curve_oid.render();
+        let mut q = self.q.render();
+        q.text = "Q (MPI)".to_string();
+        RootlessNode {
+            children: vec![curve_oid, q],
+        }
+    }
+}
+
+impl RenderRootlessly for Ed25519 {
+    // *No root node*
+    //   [[32 octets]]
+    fn render_rootlessly(&self) -> RootlessNode {
+        RootlessNode {
+            // Always 32, could be hard-coded.
+            children: vec![self.0.to_node(format!("[{} octets]", self.0.inner.len()))],
+        }
+    }
+}
+
 impl Render for Span<Mpi> {
     // MPI
     //   Length: [length]
@@ -379,14 +406,31 @@ impl Span<Mpi> {
     }
 }
 
-impl RenderRootlessly for Ed25519 {
-    // *No root node*
-    //   [[32 octets]]
-    fn render_rootlessly(&self) -> RootlessNode {
-        RootlessNode {
-            // Always 32, could be hard-coded.
-            children: vec![self.0.to_node(format!("[{} octets]", self.0.inner.len()))],
-        }
+impl Render for Span<CurveOid> {
+    // Curve OID
+    //   Name: [name]
+    //   Length: [length]
+    //   OID: [[[length] octets]]
+    fn render(&self) -> Node {
+        let mut node = self.to_node("Curve OID".to_string());
+        node.children = vec![self.render_name(), self.render_length(), self.render_oid()];
+        node
+    }
+}
+
+impl Span<CurveOid> {
+    fn render_name(&self) -> Node {
+        Node::with_text(format!("Name: {}", self.inner.name))
+    }
+
+    fn render_length(&self) -> Node {
+        let length = &self.inner.length;
+        length.to_node(format!("Length: {}", length.inner))
+    }
+
+    fn render_oid(&self) -> Node {
+        let oid = &self.inner.oid;
+        oid.to_node(format!("OID: [{} octets]", oid.inner.len()))
     }
 }
 
@@ -699,6 +743,36 @@ mod tests {
     }
 
     #[test]
+    fn eddsa_legacy() {
+        let spans = SelfIncrementingDummySpan::new();
+
+        let node = EdDsaLegacy {
+            curve_oid: spans.next(CurveOid {
+                name: CurveName::Ed25519Legacy,
+                length: spans.next(1),
+                oid: spans.next(vec![0; 2]),
+            }),
+            q: spans.next(Mpi {
+                length: spans.next(1),
+                integers: spans.next(vec![0; 2]),
+            }),
+        };
+
+        let node = node.render_rootlessly();
+        insta_assert!(node);
+    }
+
+    #[test]
+    fn ed25519() {
+        let spans = SelfIncrementingDummySpan::new();
+
+        let node = Ed25519(spans.next([0; 32]));
+
+        let node = node.render_rootlessly();
+        insta_assert!(node);
+    }
+
+    #[test]
     fn mpi() {
         let spans = SelfIncrementingDummySpan::new();
 
@@ -712,12 +786,16 @@ mod tests {
     }
 
     #[test]
-    fn ed25519() {
+    fn curve_oid() {
         let spans = SelfIncrementingDummySpan::new();
 
-        let node = Ed25519(spans.next([0; 32]));
+        let node = spans.next(CurveOid {
+            name: CurveName::Ed25519Legacy,
+            length: spans.next(1),
+            oid: spans.next(vec![0; 2]),
+        });
 
-        let node = node.render_rootlessly();
+        let node = node.render();
         insta_assert!(node);
     }
 

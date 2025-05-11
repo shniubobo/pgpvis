@@ -1,0 +1,25 @@
+---
+source: pgpvis-core/src/render.rs
+expression: node
+---
+span:
+  offset: 4
+  length: 5
+  inner: ~
+text: Curve OID
+children:
+  - span: ~
+    text: "Name: Ed25519Legacy"
+    children: []
+  - span:
+      offset: 0
+      length: 1
+      inner: ~
+    text: "Length: 1"
+    children: []
+  - span:
+      offset: 2
+      length: 3
+      inner: ~
+    text: "OID: [2 octets]"
+    children: []

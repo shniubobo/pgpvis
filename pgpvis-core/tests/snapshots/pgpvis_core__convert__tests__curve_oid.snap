@@ -1,0 +1,25 @@
+---
+source: pgpvis-core/src/convert.rs
+expression: value
+---
+offset: 0
+length: 2
+inner:
+  name: Ed25519Legacy
+  length:
+    offset: 0
+    length: 1
+    inner: 9
+  oid:
+    offset: 1
+    length: 1
+    inner:
+      - 43
+      - 6
+      - 1
+      - 4
+      - 1
+      - 218
+      - 71
+      - 15
+      - 1
