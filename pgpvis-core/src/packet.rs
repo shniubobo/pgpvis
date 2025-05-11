@@ -73,8 +73,8 @@ macro_rules! gen_any_packet_enum {
         pub enum AnyPacket {
             $( $packet_type(Packet<$packet_type>), )+
             // TODO: Remove this after we add placeholders for each packet type.
-            #[display("Unknown")]
-            Unknown,
+            #[display("Unimplemented")]
+            Unimplemented,
         }
     };
 }
@@ -667,9 +667,9 @@ mod tests {
             )
         } => "[13] User ID: a"
 
-        any_packet_unknown {
-            AnyPacket::Unknown
-        } => "Unknown"
+        any_packet_unimplemented {
+            AnyPacket::Unimplemented
+        } => "Unimplemented"
 
         packet {
             Packet {

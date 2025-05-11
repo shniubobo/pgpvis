@@ -153,7 +153,7 @@ impl Render for Span<AnyPacket> {
             AnyPacket::UserId(packet) => render_packet!(node, packet),
             AnyPacket::PublicSubkey(packet) => render_packet!(node, packet),
             AnyPacket::Private60(packet) => render_packet!(node, packet),
-            AnyPacket::Unknown => (),
+            AnyPacket::Unimplemented => (),
         }
 
         node
@@ -542,7 +542,7 @@ mod tests {
     fn any_packet_unknown() {
         let spans = SelfIncrementingDummySpan::new();
 
-        let node = spans.next(AnyPacket::Unknown);
+        let node = spans.next(AnyPacket::Unimplemented);
 
         let node = node.render();
         insta_assert!(node);

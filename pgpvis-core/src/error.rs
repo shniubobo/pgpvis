@@ -57,7 +57,7 @@ pub enum Error {
 
     // TODO: Remove this after we've implemented all packet types.
     #[error("unimplemented packet at span {span}; type id: {type_id}")]
-    UnknownPacket { type_id: u8, span: Span<()> },
+    UnimplementedPacket { type_id: u8, span: Span<()> },
 
     // The plan is that we allow conversion between the two formats in the
     // future, and this `Error` is returned in case a `CTB` of the wrong format

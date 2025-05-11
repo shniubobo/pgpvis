@@ -190,7 +190,7 @@ impl Convert<PacketParser<'_>> for AnyPacket {
                     while converter.next_span().is_ok() {}
                     Ok(())
                 })?;
-                return Err(Error::UnknownPacket {
+                return Err(Error::UnimplementedPacket {
                     type_id: unknown_packet.tag().into(),
                     span,
                 });
