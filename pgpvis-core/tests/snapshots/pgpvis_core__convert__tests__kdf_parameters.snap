@@ -1,0 +1,23 @@
+---
+source: pgpvis-core/src/convert.rs
+expression: value
+---
+offset: 0
+length: 4
+inner:
+  length:
+    offset: 0
+    length: 1
+    inner: 3
+  reserved:
+    offset: 1
+    length: 1
+    inner: 1
+  hash_id:
+    offset: 2
+    length: 1
+    inner: Sha2_256
+  symmetric_id:
+    offset: 3
+    length: 1
+    inner: Aes128
