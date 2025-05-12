@@ -10,6 +10,7 @@
   "pnpm": {
     "onlyBuiltDependencies": [
       "@swc/core",
+      "@tailwindcss/oxide",
       "esbuild"
     ],
     "patchedDependencies": {
