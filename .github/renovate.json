@@ -15,6 +15,7 @@
     "schedule:weekly"
   ],
   "prConcurrentLimit": 3,
+  "platformAutomerge": false,
   "commitMessagePrefix": "🧹",
   "commitMessageLowerCase": "never",
   "commitBody": "Changelog: skip",
