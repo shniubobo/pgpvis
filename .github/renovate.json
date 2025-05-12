@@ -20,6 +20,9 @@
   "commitMessageLowerCase": "never",
   "commitBody": "Changelog: skip",
   "rangeStrategy": "bump",
+  "env": {
+    "RUSTC_BOOTSTRAP": "1"
+  },
   "customManagers": [
     {
       "customType": "regex",
