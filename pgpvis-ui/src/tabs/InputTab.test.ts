@@ -3,7 +3,9 @@ import { mount, type VueWrapper } from "@vue/test-utils";
 import { Node } from "@mocks/@pgpvis-core";
 import InputTab from "./InputTab.vue";
 
-vi.mock("@pgpvis-core");
+// The second argument is necessary for vitest's vscode extension. Weird that
+// the CLI works fine without it.
+vi.mock("@pgpvis-core", () => import("@mocks/@pgpvis-core"));
 
 let input_tab: VueWrapper;
 
@@ -17,7 +19,7 @@ test("with message, emit non-empty values on click", async () => {
 
   expect(input_tab.emitted("update-hex-view")).toHaveLength(1);
   expect(input_tab.emitted("update-packets")).toHaveLength(1);
-  // Values defined in `@mocks/pgpvis-core`
+  // Values defined in `@mocks/@pgpvis-core`
   expect(input_tab.emitted("update-hex-view")![0]).toStrictEqual([
     new Uint8Array(1),
   ]);
@@ -31,7 +33,6 @@ test("without message, emit empty values on click", async () => {
 
   expect(input_tab.emitted("update-hex-view")).toHaveLength(1);
   expect(input_tab.emitted("update-packets")).toHaveLength(1);
-  // Values defined in `@mocks/pgpvis-core`
   expect(input_tab.emitted("update-hex-view")![0]).toStrictEqual([
     new Uint8Array(0),
   ]);
@@ -44,7 +45,7 @@ test("first with message, and then with no message", async () => {
 
   expect(input_tab.emitted("update-hex-view")).toHaveLength(1);
   expect(input_tab.emitted("update-packets")).toHaveLength(1);
-  // Values defined in `@mocks/pgpvis-core`
+  // Values defined in `@mocks/@pgpvis-core`
   expect(input_tab.emitted("update-hex-view")![0]).toStrictEqual([
     new Uint8Array(1),
   ]);
@@ -57,7 +58,7 @@ test("first with message, and then with no message", async () => {
 
   expect(input_tab.emitted("update-hex-view")).toHaveLength(2);
   expect(input_tab.emitted("update-packets")).toHaveLength(2);
-  // Values defined in `@mocks/pgpvis-core`
+  // Values defined in `@mocks/@pgpvis-core`
   expect(input_tab.emitted("update-hex-view")![1]).toStrictEqual([
     new Uint8Array(0),
   ]);
