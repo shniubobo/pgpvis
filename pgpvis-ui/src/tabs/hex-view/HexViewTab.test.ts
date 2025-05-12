@@ -7,14 +7,8 @@ import HexViewTab from "./HexViewTab.vue";
 
 const LINE_HEIGHT = 24; // TODO: Do not hard-code this.
 
-// https://github.com/TanStack/virtual/issues/29
-// @ts-expect-error Mocking, type is not important
-window.Element.prototype.getBoundingClientRect = () => {
-  return { height: LINE_HEIGHT, width: 100 /* A random number */ };
-};
-
 // https://gist.github.com/Joandres-Lara/dbc80391d31aba7daf69b2caa23ef535#file-virtuallist-test-js-L125
-// (as seen in the issue linked above)
+// (as seen in https://github.com/TanStack/virtual/issues/29)
 async function render_lines(component: VueWrapper, lines_n: number = 10) {
   await component.trigger("scroll", { scrollTop: LINE_HEIGHT * lines_n });
 }
@@ -24,6 +18,14 @@ function inject<T>(key: string, component: VueWrapper): T {
   // @ts-expect-error Accessing private member
   return component.vm.$.provides[key];
 }
+
+// https://github.com/TanStack/virtual/issues/641#issuecomment-2851908893
+Object.defineProperty(HTMLElement.prototype, "offsetHeight", {
+  value: 800,
+});
+Object.defineProperty(HTMLElement.prototype, "offsetWidth", {
+  value: 800,
+});
 
 // These could break if we allow customizing bytes per line in the future.
 // TODO: Remove hard-coded number of bytes.
