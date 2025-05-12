@@ -4,6 +4,7 @@ updates:
   - package-ecosystem: npm
     directories:
       - "/"
+    versioning-strategy: increase
     schedule:
       interval: weekly
     groups:
