@@ -24,6 +24,9 @@
   },
   "minimumReleaseAge": "14 days",
   "internalChecksFilter": "strict",
+  "lockFileMaintenance": {
+    "enabled": true
+  },
   "customManagers": [
     {
       "customType": "regex",
