@@ -1,0 +1,43 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    ":disableDependencyDashboard",
+    ":semanticCommitsDisabled",
+    ":ignoreModulesAndTests",
+    "group:all",
+    "replacements:all",
+    "workarounds:all",
+    "helpers:pinGitHubActionDigests",
+    ":configMigration",
+
+    ":automergeMinor",
+    ":rebaseStalePrs",
+    ":separateMajorReleases",
+
+    "npm:unpublishSafe",
+
+    "schedule:weekly"
+  ],
+  "prConcurrentLimit": 3,
+  "commitMessagePrefix": "🧹",
+  "commitBody": "Changelog: skip",
+  "rangeStrategy": "bump",
+
+  "customManagers": [
+    {
+      "description": "Upgrades the `channel` field in the `rust-toolchain.toml` file (adapted from https://github.com/Turbo87/renovate-config)",
+      "managerFilePatterns": ["/(^|/)rust-toolchain\\.toml?$/"],
+      "matchStrings": [
+        "channel\\s*=\\s*\"(?<currentValue>\\d+\\.\\d+(\\.\\d+)?)\""
+      ],
+      "depNameTemplate": "rust",
+      "packageNameTemplate": "rust-lang/rust",
+      "datasourceTemplate": "github-tags"
+    }
+  ],
+  "packageRules": [{
+    "matchManagers": ["regex"],
+    "matchDepNames": ["rust"],
+    "commitMessageTopic": "Rust"
+  }]
+}
