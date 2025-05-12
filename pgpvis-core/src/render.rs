@@ -265,7 +265,9 @@ impl RenderRootlessly for PublicKey {
     fn render_rootlessly(&self) -> RootlessNode {
         match &self {
             Self::Version4RsaEncryptSign(inner) => inner.render_rootlessly(),
+            Self::Version4Ecdh(inner) => inner.render_rootlessly(),
             Self::Version4EdDsaLegacy(inner) => inner.render_rootlessly(),
+            Self::Version4X25519(inner) => inner.render_rootlessly(),
             Self::Version4Ed25519(inner) => inner.render_rootlessly(),
             Self::Version4Unimplemented(inner) => inner.render_rootlessly(),
         }
@@ -278,7 +280,9 @@ impl RenderRootlessly for PublicSubkey {
     fn render_rootlessly(&self) -> RootlessNode {
         match &self {
             Self::Version4RsaEncryptSign(inner) => inner.render_rootlessly(),
+            Self::Version4Ecdh(inner) => inner.render_rootlessly(),
             Self::Version4EdDsaLegacy(inner) => inner.render_rootlessly(),
+            Self::Version4X25519(inner) => inner.render_rootlessly(),
             Self::Version4Ed25519(inner) => inner.render_rootlessly(),
             Self::Version4Unimplemented(inner) => inner.render_rootlessly(),
         }
@@ -354,6 +358,25 @@ impl RenderRootlessly for RsaEncryptSign {
         e.text = "e (MPI)".to_string();
         RootlessNode {
             children: vec![n, e],
+        }
+    }
+}
+
+impl RenderRootlessly for Ecdh {
+    // *No root node*
+    //   &[Curve OID]
+    //   &[MPI] -> Q (MPI)
+    //   &[KDF Parameters]
+    fn render_rootlessly(&self) -> RootlessNode {
+        let curve_oid = self.curve_oid.render();
+        let q = {
+            let mut q = self.q.render();
+            q.text = "Q (MPI)".to_string();
+            q
+        };
+        let kdf_parameters = self.kdf_parameters.render();
+        RootlessNode {
+            children: vec![curve_oid, q, kdf_parameters],
         }
     }
 }
@@ -457,6 +480,54 @@ impl Span<CurveOid> {
     }
 }
 
+impl Render for Span<KdfParameters> {
+    // KDF Parameters
+    //   Length: 3
+    //   Reserved: 1
+    //   Hash Algorithm: [name] ([id])
+    //   Symmetric Key Algorithm: [name] ([id])
+    fn render(&self) -> Node {
+        let mut node = self.to_node("KDF Parameters".to_string());
+        node.children = vec![
+            self.render_length(),
+            self.render_reserved(),
+            self.render_hash_id(),
+            self.render_symmetric_id(),
+        ];
+        node
+    }
+}
+
+impl Span<KdfParameters> {
+    fn render_length(&self) -> Node {
+        self.inner
+            .length
+            .to_node(format!("Length: {}", KdfParameters::LENGTH))
+    }
+
+    fn render_reserved(&self) -> Node {
+        self.inner
+            .reserved
+            .to_node(format!("Reserved: {}", KdfParameters::RESERVED))
+    }
+
+    fn render_hash_id(&self) -> Node {
+        let hash_id = self.inner.hash_id;
+        hash_id.to_node(format!(
+            "Hash Algorithm: {} ({})",
+            hash_id.inner, hash_id.inner as u8,
+        ))
+    }
+
+    fn render_symmetric_id(&self) -> Node {
+        let symmetric_id = self.inner.symmetric_id;
+        symmetric_id.to_node(format!(
+            "Symmetric Key Algorithm: {} ({})",
+            symmetric_id.inner, symmetric_id.inner as u8,
+        ))
+    }
+}
+
 impl RenderRootlessly for UserId {
     // *No root node*
     //   User ID: [User ID]
@@ -502,6 +573,7 @@ mod tests {
     //!    `render_rootlessly` implementations.
 
     use std::cell::RefCell;
+    use std::marker::PhantomData;
 
     use super::*;
 
@@ -766,6 +838,32 @@ mod tests {
     }
 
     #[test]
+    fn ecdh() {
+        let spans = SelfIncrementingDummySpan::new();
+
+        let node = Ecdh {
+            curve_oid: spans.next(CurveOid {
+                name: CurveName::Curve25519Legacy,
+                length: spans.next(1),
+                oid: spans.next(vec![0; 2]),
+            }),
+            q: spans.next(Mpi {
+                length: spans.next(1),
+                integers: spans.next(vec![0; 2]),
+            }),
+            kdf_parameters: spans.next(KdfParameters {
+                length: spans.next(PhantomData),
+                reserved: spans.next(PhantomData),
+                hash_id: spans.next(HashAlgorithmId::Sha3_512),
+                symmetric_id: spans.next(SymmetricKeyAlgorithmId::Aes256),
+            }),
+        };
+
+        let node = node.render_rootlessly();
+        insta_assert!(node);
+    }
+
+    #[test]
     fn eddsa_legacy() {
         let spans = SelfIncrementingDummySpan::new();
 
@@ -832,6 +930,21 @@ mod tests {
             name: CurveName::Ed25519Legacy,
             length: spans.next(1),
             oid: spans.next(vec![0; 2]),
+        });
+
+        let node = node.render();
+        insta_assert!(node);
+    }
+
+    #[test]
+    fn kdf_parameters() {
+        let spans = SelfIncrementingDummySpan::new();
+
+        let node = spans.next(KdfParameters {
+            length: spans.next(PhantomData),
+            reserved: spans.next(PhantomData),
+            hash_id: spans.next(HashAlgorithmId::Sha2_512),
+            symmetric_id: spans.next(SymmetricKeyAlgorithmId::Camellia256),
         });
 
         let node = node.render();

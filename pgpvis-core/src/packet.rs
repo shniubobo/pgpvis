@@ -289,7 +289,9 @@ where
 #[non_exhaustive]
 pub enum PublicKey {
     Version4RsaEncryptSign(PublicVersion4<Key, RsaEncryptSign>),
+    Version4Ecdh(PublicVersion4<Key, Ecdh>),
     Version4EdDsaLegacy(PublicVersion4<Key, EdDsaLegacy>),
+    Version4X25519(PublicVersion4<Key, X25519>),
     Version4Ed25519(PublicVersion4<Key, Ed25519>),
     Version4Unimplemented(PublicVersion4<Key, UnimplementedPublicKeyAlgorithm>),
 }
@@ -302,7 +304,9 @@ pub enum PublicKey {
 #[non_exhaustive]
 pub enum PublicSubkey {
     Version4RsaEncryptSign(PublicVersion4<Subkey, RsaEncryptSign>),
+    Version4Ecdh(PublicVersion4<Subkey, Ecdh>),
     Version4EdDsaLegacy(PublicVersion4<Subkey, EdDsaLegacy>),
+    Version4X25519(PublicVersion4<Subkey, X25519>),
     Version4Ed25519(PublicVersion4<Subkey, Ed25519>),
     Version4Unimplemented(PublicVersion4<Subkey, UnimplementedPublicKeyAlgorithm>),
 }
@@ -459,6 +463,7 @@ macro_rules! gen_public_key_algorithm_enums_and_impls {
 
 gen_public_key_algorithm_enums_and_impls! {
     RsaEncryptSign = 1,
+    Ecdh = 18,
     EdDsaLegacy = 22,
     X25519 = 25,
     Ed25519 = 27,
@@ -476,6 +481,14 @@ impl RsaEncryptSign {
     pub fn new(n: Span<Mpi>, e: Span<Mpi>) -> Self {
         Self { n, e }
     }
+}
+
+#[derive(Clone, Debug, Display, PartialEq, Eq, Serialize)]
+#[display("ECDH public key algorithm")]
+pub struct Ecdh {
+    pub curve_oid: Span<CurveOid>,
+    pub q: Span<Mpi>,
+    pub kdf_parameters: Span<KdfParameters>,
 }
 
 #[derive(Clone, Debug, Display, PartialEq, Eq, Serialize)]
@@ -574,6 +587,124 @@ pub enum CurveName {
     Ed25519Legacy,
     #[display("Curve25519Legacy")]
     Curve25519Legacy,
+}
+
+/// Key derivation function (KDF) parameters.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct KdfParameters {
+    /// Placeholder representing the length of all fields that follow.
+    ///
+    /// For the actual value, see [`Self::LENGTH`].
+    #[serde(serialize_with = "KdfParameters::serialize_length")]
+    pub length: Span<PhantomData<u8>>,
+
+    /// Placeholder for a reserved field.
+    ///
+    /// For the actual value, see [`Self::RESERVED`].
+    #[serde(serialize_with = "KdfParameters::serialize_reserved")]
+    pub reserved: Span<PhantomData<u8>>,
+
+    pub hash_id: Span<HashAlgorithmId>,
+    pub symmetric_id: Span<SymmetricKeyAlgorithmId>,
+}
+
+impl KdfParameters {
+    pub const LENGTH: u8 = 3;
+    pub const RESERVED: u8 = 1;
+
+    fn serialize_length<S>(
+        length: &Span<PhantomData<u8>>,
+        serializer: S,
+    ) -> StdResult<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let Span {
+            offset,
+            length: span_length,
+            ..
+        } = *length;
+        Span {
+            offset,
+            length: span_length,
+            inner: Self::LENGTH,
+        }
+        .serialize(serializer)
+    }
+
+    fn serialize_reserved<S>(
+        reserved: &Span<PhantomData<u8>>,
+        serializer: S,
+    ) -> StdResult<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let Span { offset, length, .. } = *reserved;
+        Span {
+            offset,
+            length,
+            inner: Self::RESERVED,
+        }
+        .serialize(serializer)
+    }
+}
+
+#[derive(Copy, Clone, Debug, Display, PartialEq, Eq, Serialize)]
+#[repr(u8)]
+#[non_exhaustive]
+pub enum SymmetricKeyAlgorithmId {
+    #[display("Plaintext or unencrypted data")]
+    Plaintext = 0,
+    #[display("IDEA")]
+    Idea = 1,
+    #[display("TripleDES (or DES-EDE) with 168-bit key derived from 192")]
+    TripleDes = 2,
+    #[display("CAST5 with 128-bit key")]
+    Cast5 = 3,
+    #[display("Blowfish with 128-bit key, 16 rounds")]
+    Blowfish = 4,
+    #[display("Reserved")]
+    Reserved005 = 5,
+    #[display("Reserved")]
+    Reserved006 = 6,
+    #[display("AES with 128-bit key")]
+    Aes128 = 7,
+    #[display("AES with 192-bit key")]
+    Aes192 = 8,
+    #[display("AES with 256-bit key")]
+    Aes256 = 9,
+    #[display("Twofish with 256-bit key")]
+    Twofish = 10,
+    #[display("Camellia with 128-bit key")]
+    Camellia128 = 11,
+    #[display("Camellia with 192-bit key")]
+    Camellia192 = 12,
+    #[display("Camellia with 256-bit key")]
+    Camellia256 = 13,
+}
+
+#[derive(Copy, Clone, Debug, Display, PartialEq, Eq, Serialize)]
+#[repr(u8)]
+#[non_exhaustive]
+pub enum HashAlgorithmId {
+    #[display("MD5")]
+    Md5 = 1,
+    #[display("SHA-1")]
+    Sha1 = 2,
+    #[display("RIPEMD-160")]
+    Ripemd160 = 3,
+    #[display("SHA2-256")]
+    Sha2_256 = 8,
+    #[display("SHA2-384")]
+    Sha2_384 = 9,
+    #[display("SHA2-512")]
+    Sha2_512 = 10,
+    #[display("SHA2-224")]
+    Sha2_224 = 11,
+    #[display("SHA3-256")]
+    Sha3_256 = 12,
+    #[display("SHA3-512")]
+    Sha3_512 = 14,
 }
 
 #[derive(Clone, Debug, Display, PartialEq, Eq, Serialize)]
@@ -756,7 +887,27 @@ mod tests {
             }
         } => "RSA (Encrypt or Sign)"
 
-        // `CurveOid` is also tested by this.
+        ecdh {
+            Ecdh {
+                curve_oid: dummy_span!(
+                    CurveOid {
+                        name: CurveName::Curve25519Legacy,
+                        length: dummy_span!(0),
+                        oid: dummy_span!(vec![]),
+                    }
+                ),
+                q: dummy_span!(dummy_mpi!()),
+                kdf_parameters: dummy_span!(
+                    KdfParameters {
+                        length: dummy_span!(PhantomData),
+                        reserved: dummy_span!(PhantomData),
+                        hash_id: dummy_span!(HashAlgorithmId::Sha2_256),
+                        symmetric_id: dummy_span!(SymmetricKeyAlgorithmId::Aes128),
+                    }
+                )
+            }
+        } => "ECDH public key algorithm"
+
         eddsa_legacy {
             EdDsaLegacy {
                 curve_oid: dummy_span!(
@@ -782,10 +933,28 @@ mod tests {
             UnimplementedPublicKeyAlgorithm
         } => "Unimplemented"
 
+        curve_oid {
+            CurveOid {
+                name: CurveName::Curve25519Legacy,
+                length: dummy_span!(0),
+                oid: dummy_span!(vec![]),
+            }
+        } => "Curve25519Legacy"
+
         // Not testing exhaustively.
         curve_name_curve25519_legacy {
             CurveName::Curve25519Legacy
         } => "Curve25519Legacy"
+
+        // Not testing exhaustively.
+        symmetric_key_algorithm_id {
+            SymmetricKeyAlgorithmId::Plaintext
+        } => "Plaintext or unencrypted data"
+
+        // Not testing exhaustively.
+        hash_algorithm_id {
+            HashAlgorithmId::Md5
+        } => "MD5"
 
         user_id {
             UserId { user_id: dummy_span!("a".to_string()) }

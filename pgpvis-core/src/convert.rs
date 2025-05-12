@@ -1,6 +1,7 @@
 //! Utility structs to convert from [`sequoia_openpgp`]'s data structures into
 //! our own ones in [`packet`](crate::packet).
 
+use std::marker::PhantomData;
 use std::result::Result as StdResult;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
@@ -432,7 +433,9 @@ macro_rules! convert_key {
 
 convert_key! {{
     RSAEncryptSign => Version4RsaEncryptSign(RsaEncryptSign);
+    ECDH => Version4Ecdh(Ecdh);
     EdDSA => Version4EdDsaLegacy(EdDsaLegacy);
+    X25519 => Version4X25519(X25519);
     Ed25519 => Version4Ed25519(Ed25519);
 }}
 
@@ -487,6 +490,29 @@ impl Convert<pgp::crypto::mpi::PublicKey> for RsaEncryptSign {
             let n = Mpi::convert_spanned(n, converter)?;
             let e = Mpi::convert_spanned(e, converter)?;
             return Ok(RsaEncryptSign::new(n, e));
+        }
+
+        err_wrong_algorithm!(from)
+    }
+}
+
+impl Convert<pgp::crypto::mpi::PublicKey> for Ecdh {
+    fn convert(from: &pgp::crypto::mpi::PublicKey, converter: &mut Converter) -> Result<Self> {
+        if let pgp::crypto::mpi::PublicKey::ECDH {
+            curve,
+            q,
+            hash,
+            sym,
+        } = from
+        {
+            let curve_oid = CurveOid::convert_spanned(curve, converter)?;
+            let q = Mpi::convert_spanned(q, converter)?;
+            let kdf_parameters = KdfParameters::convert_spanned(&(hash, sym), converter)?;
+            return Ok(Self {
+                curve_oid,
+                q,
+                kdf_parameters,
+            });
         }
 
         err_wrong_algorithm!(from)
@@ -569,6 +595,114 @@ impl TryFrom<&pgp::crypto::Curve> for CurveName {
             pgp::types::Curve::Cv25519 => Self::Curve25519Legacy,
             curve => return Err(Self::Error::Unimplemented(curve.to_string())),
         })
+    }
+}
+
+impl
+    Convert<(
+        &pgp::crypto::HashAlgorithm,
+        &pgp::crypto::SymmetricAlgorithm,
+    )> for KdfParameters
+{
+    fn convert(
+        from: &(
+            &pgp::crypto::HashAlgorithm,
+            &pgp::crypto::SymmetricAlgorithm,
+        ),
+        converter: &mut Converter,
+    ) -> Result<Self>
+    where
+        Self: Sized,
+    {
+        let (hash_id, symmetric_id) = from;
+        let length = converter.next_span_with(PhantomData)?;
+        let reserved = converter.next_span_with(PhantomData)?;
+        let hash_id = HashAlgorithmId::convert_spanned(hash_id, converter)?;
+        let symmetric_id = SymmetricKeyAlgorithmId::convert_spanned(symmetric_id, converter)?;
+        Ok(Self {
+            length,
+            reserved,
+            hash_id,
+            symmetric_id,
+        })
+    }
+}
+
+impl Convert<pgp::crypto::SymmetricAlgorithm> for SymmetricKeyAlgorithmId {
+    fn convert_spanned(
+        from: &pgp::crypto::SymmetricAlgorithm,
+        converter: &mut Converter,
+    ) -> Result<Span<Self>>
+    where
+        Self: Sized,
+    {
+        converter.next_span_with(match from {
+            pgp::crypto::SymmetricAlgorithm::Unencrypted => Self::Plaintext,
+            #[expect(deprecated)]
+            pgp::crypto::SymmetricAlgorithm::IDEA => Self::Idea,
+            #[expect(deprecated)]
+            pgp::crypto::SymmetricAlgorithm::TripleDES => Self::TripleDes,
+            #[expect(deprecated)]
+            pgp::crypto::SymmetricAlgorithm::CAST5 => Self::Cast5,
+            pgp::crypto::SymmetricAlgorithm::Blowfish => Self::Blowfish,
+            pgp::crypto::SymmetricAlgorithm::AES128 => Self::Aes128,
+            pgp::crypto::SymmetricAlgorithm::AES192 => Self::Aes192,
+            pgp::crypto::SymmetricAlgorithm::AES256 => Self::Aes256,
+            pgp::crypto::SymmetricAlgorithm::Twofish => Self::Twofish,
+            pgp::crypto::SymmetricAlgorithm::Camellia128 => Self::Camellia128,
+            pgp::crypto::SymmetricAlgorithm::Camellia192 => Self::Camellia192,
+            pgp::crypto::SymmetricAlgorithm::Camellia256 => Self::Camellia256,
+            _ => {
+                let symmetric_id: u8 = (*from).into();
+                return Err(Error::Unimplemented(format!(
+                    "symmetric algorithm id: {}",
+                    symmetric_id
+                )));
+            }
+        })
+    }
+
+    fn convert(_from: &pgp::crypto::SymmetricAlgorithm, _converter: &mut Converter) -> Result<Self>
+    where
+        Self: Sized,
+    {
+        unreachable!()
+    }
+}
+
+impl Convert<pgp::crypto::HashAlgorithm> for HashAlgorithmId {
+    fn convert_spanned(
+        from: &pgp::crypto::HashAlgorithm,
+        converter: &mut Converter,
+    ) -> Result<Span<Self>>
+    where
+        Self: Sized,
+    {
+        converter.next_span_with(match from {
+            pgp::crypto::HashAlgorithm::MD5 => Self::Md5,
+            pgp::crypto::HashAlgorithm::SHA1 => Self::Sha1,
+            pgp::crypto::HashAlgorithm::RipeMD => Self::Ripemd160,
+            pgp::crypto::HashAlgorithm::SHA256 => Self::Sha2_256,
+            pgp::crypto::HashAlgorithm::SHA384 => Self::Sha2_384,
+            pgp::crypto::HashAlgorithm::SHA512 => Self::Sha2_512,
+            pgp::crypto::HashAlgorithm::SHA224 => Self::Sha2_224,
+            pgp::crypto::HashAlgorithm::SHA3_256 => Self::Sha3_256,
+            pgp::crypto::HashAlgorithm::SHA3_512 => Self::Sha3_512,
+            _ => {
+                let hash_id: u8 = (*from).into();
+                return Err(Error::Unimplemented(format!(
+                    "hash algorithm id: {}",
+                    hash_id
+                )));
+            }
+        })
+    }
+
+    fn convert(_from: &pgp::crypto::HashAlgorithm, _converter: &mut Converter) -> Result<Self>
+    where
+        Self: Sized,
+    {
+        unreachable!()
     }
 }
 
@@ -789,6 +923,15 @@ mod tests {
             } => 4 @ RsaEncryptSign
         }
 
+        ecdh {
+            pgp::crypto::mpi::PublicKey::ECDH {
+                curve: pgp::crypto::Curve::Cv25519,
+                q: pgp::crypto::mpi::MPI::new(&[1, 2, 3]),
+                hash: pgp::crypto::HashAlgorithm::SHA256,
+                sym: pgp::crypto::SymmetricAlgorithm::AES128,
+            } => 8 @ Ecdh
+        }
+
         eddsa_legacy {
             pgp::crypto::mpi::PublicKey::EdDSA {
                 curve: pgp::crypto::Curve::Ed25519,
@@ -814,6 +957,21 @@ mod tests {
 
         curve_oid {
             pgp::crypto::Curve::Ed25519 => 2 @ CurveOid
+        }
+
+        kdf_parameters {
+            (
+                &pgp::crypto::HashAlgorithm::SHA256,
+                &pgp::crypto::SymmetricAlgorithm::AES128,
+            ) => 4 @ KdfParameters
+        }
+
+        symmetric_key_algorithm_id {
+            pgp::crypto::SymmetricAlgorithm::Unencrypted => 1 @ SymmetricKeyAlgorithmId
+        }
+
+        hash_algorithm_id {
+            pgp::crypto::HashAlgorithm::SHA512 => 1 @ HashAlgorithmId
         }
 
         user_id {

@@ -1,0 +1,65 @@
+---
+source: pgpvis-core/src/convert.rs
+expression: value
+---
+offset: 0
+length: 8
+inner:
+  curve_oid:
+    offset: 0
+    length: 2
+    inner:
+      name: Curve25519Legacy
+      length:
+        offset: 0
+        length: 1
+        inner: 10
+      oid:
+        offset: 1
+        length: 1
+        inner:
+          - 43
+          - 6
+          - 1
+          - 4
+          - 1
+          - 151
+          - 85
+          - 1
+          - 5
+          - 1
+  q:
+    offset: 2
+    length: 2
+    inner:
+      length:
+        offset: 2
+        length: 1
+        inner: 17
+      integers:
+        offset: 3
+        length: 1
+        inner:
+          - 1
+          - 2
+          - 3
+  kdf_parameters:
+    offset: 4
+    length: 4
+    inner:
+      length:
+        offset: 4
+        length: 1
+        inner: 3
+      reserved:
+        offset: 5
+        length: 1
+        inner: 1
+      hash_id:
+        offset: 6
+        length: 1
+        inner: Sha2_256
+      symmetric_id:
+        offset: 7
+        length: 1
+        inner: Aes128
