@@ -121,8 +121,10 @@ filter_unconventional = true
 split_commits = false
 # regex for preprocessing the commit messages
 commit_preprocessors = [
+    # Normalize "✨ (scope) ! : " into "✨(scope)! " (note the spaces and colon)
+    { pattern = '^(✨|🐛|🔧|🧹)[ \t]*(\(\S*\))?[ \t]*(!)?(?:[ \t]*:[ \t]*)?', replace = "$1$2$3 " },
     # Add a colon to make it conventional-commit-compatible
-    { pattern = '^((?:✨|🐛|🔧|🧹)(?:\(.*\))?!?)', replace = "$1:" },
+    { pattern = '^((?:✨|🐛|🔧|🧹)(?:\(\S*\))?!?)', replace = "$1:" },
     # Preprocess `Changelog: detail`
     { pattern = "(?ms)^(✨|🐛|🔧)(.*(?i)^changelog: ?detail$(?-i).*)", replace = "$1-$2" },
 ]
