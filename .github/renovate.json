@@ -25,9 +25,6 @@
   },
   "minimumReleaseAge": "14 days",
   "internalChecksFilter": "strict",
-  "lockFileMaintenance": {
-    "enabled": true
-  },
   "customManagers": [
     {
       "customType": "regex",
@@ -44,6 +41,12 @@
     }
   ],
   "packageRules": [
+    {
+      "matchManagers": [
+        "node"
+      ],
+      "minimumReleaseAge": "3 days"
+    },
     {
       "matchManagers": [
         "custom.regex"
