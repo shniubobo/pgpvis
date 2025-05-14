@@ -1,0 +1,17 @@
+---
+source: pgpvis-core/src/convert.rs
+expression: value
+---
+offset: 0
+length: 1
+inner:
+  KeyFlags:
+    offset: 0
+    length: 1
+    inner:
+      - offset: 0
+        length: 1
+        inner: 191
+      - offset: 1
+        length: 1
+        inner: 12

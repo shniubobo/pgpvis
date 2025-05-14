@@ -1,0 +1,16 @@
+---
+source: pgpvis-core/src/convert.rs
+expression: value
+---
+offset: 0
+length: 2
+inner:
+  TrustSignature:
+    level:
+      offset: 0
+      length: 1
+      inner: 255
+    amount:
+      offset: 1
+      length: 1
+      inner: 60

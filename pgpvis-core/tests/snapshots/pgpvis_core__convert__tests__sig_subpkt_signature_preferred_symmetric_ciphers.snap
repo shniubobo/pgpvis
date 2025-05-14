@@ -1,0 +1,20 @@
+---
+source: pgpvis-core/src/convert.rs
+expression: value
+---
+offset: 0
+length: 1
+inner:
+  PreferredSymmetricCiphers:
+    offset: 0
+    length: 1
+    inner:
+      - offset: 0
+        length: 1
+        inner: Aes256
+      - offset: 1
+        length: 1
+        inner: Aes192
+      - offset: 2
+        length: 1
+        inner: Aes128

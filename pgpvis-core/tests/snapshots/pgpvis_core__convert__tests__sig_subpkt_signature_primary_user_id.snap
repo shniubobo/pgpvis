@@ -1,0 +1,11 @@
+---
+source: pgpvis-core/src/convert.rs
+expression: value
+---
+offset: 0
+length: 1
+inner:
+  PrimaryUserId:
+    offset: 0
+    length: 1
+    inner: true

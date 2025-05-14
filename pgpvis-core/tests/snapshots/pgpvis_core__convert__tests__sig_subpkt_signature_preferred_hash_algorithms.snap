@@ -1,0 +1,20 @@
+---
+source: pgpvis-core/src/convert.rs
+expression: value
+---
+offset: 0
+length: 1
+inner:
+  PreferredHashAlgorithms:
+    offset: 0
+    length: 1
+    inner:
+      - offset: 0
+        length: 1
+        inner: Sha2_512
+      - offset: 1
+        length: 1
+        inner: Sha2_384
+      - offset: 2
+        length: 1
+        inner: Sha2_256

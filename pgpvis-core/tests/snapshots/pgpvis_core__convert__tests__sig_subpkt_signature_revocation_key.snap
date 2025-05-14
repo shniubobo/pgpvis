@@ -1,0 +1,40 @@
+---
+source: pgpvis-core/src/convert.rs
+expression: value
+---
+offset: 0
+length: 3
+inner:
+  RevocationKey:
+    class:
+      offset: 1
+      length: 1
+      inner: 192
+    pub_key_algo_id:
+      offset: 2
+      length: 1
+      inner: 27
+    fingerprint:
+      offset: 0
+      length: 1
+      inner:
+        - 1
+        - 1
+        - 1
+        - 1
+        - 1
+        - 1
+        - 1
+        - 1
+        - 1
+        - 1
+        - 1
+        - 1
+        - 1
+        - 1
+        - 1
+        - 1
+        - 1
+        - 1
+        - 1
+        - 1

@@ -1,0 +1,20 @@
+---
+source: pgpvis-core/src/convert.rs
+expression: value
+---
+offset: 0
+length: 1
+inner:
+  PreferredCompressionAlgorithms:
+    offset: 0
+    length: 1
+    inner:
+      - offset: 0
+        length: 1
+        inner: Zlib
+      - offset: 1
+        length: 1
+        inner: Zip
+      - offset: 2
+        length: 1
+        inner: Uncompressed

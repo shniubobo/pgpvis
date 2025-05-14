@@ -1,0 +1,16 @@
+---
+source: pgpvis-core/src/convert.rs
+expression: value
+---
+offset: 0
+length: 2
+inner:
+  RevocationReason:
+    code:
+      offset: 0
+      length: 1
+      inner: UserIdInvalid
+    reason:
+      offset: 1
+      length: 1
+      inner: UID changed.

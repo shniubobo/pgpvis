@@ -1,0 +1,38 @@
+---
+source: pgpvis-core/src/convert.rs
+expression: value
+---
+offset: 0
+length: 1
+inner:
+  PreferredAeadCiphersuites:
+    offset: 0
+    length: 1
+    inner:
+      - offset: 0
+        length: 2
+        inner:
+          - offset: 0
+            length: 1
+            inner: Aes256
+          - offset: 1
+            length: 1
+            inner: Eax
+      - offset: 2
+        length: 2
+        inner:
+          - offset: 2
+            length: 1
+            inner: Aes192
+          - offset: 3
+            length: 1
+            inner: Ocb
+      - offset: 4
+        length: 2
+        inner:
+          - offset: 4
+            length: 1
+            inner: Aes128
+          - offset: 5
+            length: 1
+            inner: Gcm

@@ -1,0 +1,37 @@
+---
+source: pgpvis-core/src/convert.rs
+expression: value
+---
+offset: 0
+length: 2
+inner:
+  IssuerFingerprint:
+    version:
+      offset: 0
+      length: 1
+      inner: ~
+    fingerprint:
+      offset: 1
+      length: 1
+      inner:
+        Version4:
+          - 1
+          - 1
+          - 1
+          - 1
+          - 1
+          - 1
+          - 1
+          - 1
+          - 1
+          - 1
+          - 1
+          - 1
+          - 1
+          - 1
+          - 1
+          - 1
+          - 1
+          - 1
+          - 1
+          - 1

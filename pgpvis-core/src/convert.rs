@@ -6,7 +6,11 @@ use std::result::Result as StdResult;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
-use sequoia_openpgp::{self as pgp, packet::key as pgp_key, parse::PacketParser};
+use enumflags2::BitFlags;
+use seq_macro::seq;
+use sequoia_openpgp::{
+    self as pgp, packet::key as pgp_key, parse::PacketParser, serialize::MarshalInto,
+};
 
 use crate::error::*;
 use crate::packet::*;
@@ -176,6 +180,9 @@ impl Convert<PacketParser<'_>> for AnyPacket {
         let header = from.header();
         let body = &from.packet;
         let ret = match body {
+            pgp::Packet::Signature(body) => {
+                AnyPacket::Signature(convert_packet!(header, body, converter))
+            }
             pgp::Packet::PublicKey(body) => {
                 AnyPacket::PublicKey(convert_packet!(header, body, converter))
             }
@@ -362,6 +369,498 @@ where
     }
 }
 
+macro_rules! convert_sig {
+    ($sig:ident => $to:ty, $converter:ident) => {{
+        let version = $converter.next_span_with(PhantomData)?;
+        let type_id = SignatureTypeId::convert_spanned(&$sig.typ(), $converter)?;
+        let pub_key_algo_id = $converter.next_span_with(PhantomData)?;
+        let hash_algo_id = HashAlgorithmId::convert_spanned(&$sig.hash_algo(), $converter)?;
+        let hashed_length = $converter.next_span_with(Self::area_length($sig.hashed_area())?)?;
+        let hashed_subpackets =
+            SignatureSubpackets::convert_spanned($sig.hashed_area(), $converter)?;
+        let unhashed_length =
+            $converter.next_span_with(Self::area_length($sig.unhashed_area())?)?;
+        let unhashed_subpackets =
+            SignatureSubpackets::convert_spanned($sig.unhashed_area(), $converter)?;
+        let hash_prefix = $converter.spanned(|converter| {
+            // `sequoia-openpgp` represents the prefix with two
+            // fields: `digest_prefix1`, `digest_prefix2`.
+            converter.next_span()?;
+            converter.next_span()?;
+            Ok(*$sig.digest_prefix())
+        })?;
+        let sig: SignatureVersion4<$to> = SignatureVersion4 {
+            version,
+            type_id,
+            pub_key_algo_id,
+            hash_algo_id,
+            hashed_length,
+            hashed_subpackets,
+            unhashed_length,
+            unhashed_subpackets,
+            hash_prefix,
+            mpis: <$to as PublicKeyAlgorithm>::SignatureMpis::convert_spanned(
+                $sig.mpis(),
+                $converter,
+            )?,
+        };
+        sig.into()
+    }};
+}
+
+impl Convert<pgp::packet::Signature> for Signature {
+    fn convert(sig: &pgp::packet::Signature, converter: &mut Converter) -> Result<Self>
+    where
+        Self: Sized,
+    {
+        let ret = match sig {
+            pgp::packet::Signature::V4(sig) => match sig.mpis() {
+                pgp::crypto::mpi::Signature::RSA { .. } => {
+                    convert_sig!(sig => RsaEncryptSign, converter)
+                }
+                pgp::crypto::mpi::Signature::EdDSA { .. } => {
+                    convert_sig!(sig => EdDsaLegacy, converter)
+                }
+                pgp::crypto::mpi::Signature::Ed25519 { .. } => {
+                    convert_sig!(sig => Ed25519, converter)
+                }
+                _ => {
+                    let version = converter.next_span_with(PhantomData)?;
+                    let type_id = SignatureTypeId::convert_spanned(&sig.typ(), converter)?;
+                    let pub_key_algo_id = converter.next_span_with(PhantomData)?;
+                    let hash_algo_id =
+                        HashAlgorithmId::convert_spanned(&sig.hash_algo(), converter)?;
+                    let hashed_length =
+                        converter.next_span_with(Self::area_length(sig.hashed_area())?)?;
+                    let hashed_subpackets =
+                        SignatureSubpackets::convert_spanned(sig.hashed_area(), converter)?;
+                    let unhashed_length =
+                        converter.next_span_with(Self::area_length(sig.unhashed_area())?)?;
+                    let unhashed_subpackets =
+                        SignatureSubpackets::convert_spanned(sig.unhashed_area(), converter)?;
+                    let hash_prefix = converter.spanned(|converter| {
+                        // `sequoia-openpgp` represents the prefix with two
+                        // fields: `digest_prefix1`, `digest_prefix2`.
+                        converter.next_span()?;
+                        converter.next_span()?;
+                        Ok(*sig.digest_prefix())
+                    })?;
+                    let sig: SignatureVersion4<PublicKeyAlgorithmUnimplemented> =
+                        SignatureVersion4 {
+                            version,
+                            type_id,
+                            pub_key_algo_id,
+                            hash_algo_id,
+                            hashed_length,
+                            hashed_subpackets,
+                            unhashed_length,
+                            unhashed_subpackets,
+                            hash_prefix,
+                            mpis: converter.spanned(|converter| {
+                                // Exhaust all remaining spans.
+                                while converter.next_span().is_ok() {}
+                                Ok(SignatureMpisUnimplemented)
+                            })?,
+                        };
+                    sig.into()
+                }
+            },
+            _ => Err(Error::Unimplemented(format!(
+                "signature version {}",
+                sig.version()
+            )))?,
+        };
+        Ok(ret)
+    }
+}
+
+impl Signature {
+    fn area_length(area: &pgp::packet::signature::subpacket::SubpacketArea) -> Result<u16> {
+        // This is how `sequoia-openpgp` calculates the length. The length is
+        // not stored. See https://gitlab.com/sequoia-pgp/sequoia/-/issues/1192.
+        // TODO: Once the length is exposed by `sequoia`, change to use that.
+        let length = area.serialized_len();
+        if length > u16::MAX as _ {
+            return Err(Error::SubpacketAreaLengthOverflow { length });
+        }
+        Ok(length as _)
+    }
+}
+
+impl Convert<pgp::packet::signature::subpacket::SubpacketArea> for SignatureSubpackets {
+    fn convert(
+        from: &pgp::packet::signature::subpacket::SubpacketArea,
+        converter: &mut Converter,
+    ) -> Result<Self>
+    where
+        Self: Sized,
+    {
+        from.iter()
+            .map(|subpacket| SignatureSubpacket::convert_spanned(subpacket, converter))
+            .collect::<Result<Vec<_>>>()
+            .map(|subpackets| subpackets.into())
+    }
+}
+
+impl Convert<pgp::packet::signature::subpacket::Subpacket> for SignatureSubpacket {
+    fn convert(
+        from: &pgp::packet::signature::subpacket::Subpacket,
+        converter: &mut Converter,
+    ) -> Result<Self>
+    where
+        Self: Sized,
+    {
+        // TODO: Implement conversion to `SignatureSubpacketLength` when
+        // `sequoia-openpgp` exposes the length.
+        // Blocked by: https://gitlab.com/sequoia-pgp/sequoia/-/issues/1192
+        let length = converter.next_span_with(SignatureSubpacketLength::One(0))?;
+        let type_id = SignatureSubpacketTypeIdOctet::convert_spanned(from, converter)?;
+        let data = SignatureSubpacketData::convert_spanned(from.value(), converter)?;
+        Ok(Self {
+            length,
+            type_id,
+            data,
+        })
+    }
+}
+
+impl Convert<pgp::packet::signature::subpacket::Subpacket> for SignatureSubpacketTypeIdOctet {
+    fn convert(
+        from: &pgp::packet::signature::subpacket::Subpacket,
+        converter: &mut Converter,
+    ) -> Result<Self>
+    where
+        Self: Sized,
+    {
+        converter.next_span()?;
+        Ok(Self {
+            critical: from.critical(),
+            type_id: PhantomData,
+        })
+    }
+}
+
+// This is a gigantic function, but I think we have no choice.
+impl Convert<pgp::packet::signature::subpacket::SubpacketValue> for SignatureSubpacketData {
+    fn convert(
+        from: &pgp::packet::signature::subpacket::SubpacketValue,
+        converter: &mut Converter,
+    ) -> Result<Self>
+    where
+        Self: Sized,
+    {
+        use pgp::packet::signature::subpacket::SubpacketValue as Subpkt;
+
+        let ret = match from {
+            Subpkt::SignatureCreationTime(timestamp) => {
+                Self::SignatureCreationTime(Time::convert_spanned(timestamp, converter)?)
+            }
+            Subpkt::SignatureExpirationTime(duration) => {
+                Self::SignatureExpirationTime(Time::convert_spanned(duration, converter)?)
+            }
+            Subpkt::ExportableCertification(exportable) => {
+                Self::ExportableCertification(converter.next_span_with(*exportable)?)
+            }
+            Subpkt::TrustSignature { level, trust } => Self::TrustSignature {
+                level: converter.next_span_with(*level)?,
+                amount: converter.next_span_with(*trust)?,
+            },
+            Subpkt::RegularExpression(items) => Self::RegularExpression(
+                // RFC 9580 requires that `items` is UTF-8, but we still use
+                // the `lossy` variant to accept non-UTF-8 characters, so that
+                // we need not care about how to display invalid strings. The
+                // same is also true for many `Vec<u8>`s or `[u8]`s below.
+                converter.next_span_with(String::from_utf8_lossy(items).into_owned())?,
+            ),
+            Subpkt::Revocable(revocable) => Self::Revocable(converter.next_span_with(*revocable)?),
+            Subpkt::KeyExpirationTime(duration) => {
+                Self::KeyExpirationTime(Time::convert_spanned(duration, converter)?)
+            }
+            Subpkt::PreferredSymmetricAlgorithms(algos) => Self::PreferredSymmetricCiphers(
+                Vec::<Span<SymmetricKeyAlgorithmId>>::convert_spanned(&&**algos, converter)?,
+            ),
+            Subpkt::RevocationKey(key) => {
+                let (pub_key_algo_id, fingerprint) = key.revoker();
+                let fingerprint = {
+                    let fingerprint = Fingerprint::convert_spanned(fingerprint, converter)?;
+                    match fingerprint.inner {
+                        Fingerprint::Version4(version4) => fingerprint.replace_with(version4),
+                        _ => Err(Error::WrongFingerprintVersion {
+                            expected: 4,
+                            got: fingerprint.inner.version(),
+                        })?,
+                    }
+                };
+
+                Self::RevocationKey {
+                    class: converter.next_span_with(key.class())?,
+                    pub_key_algo_id: PublicKeyAlgorithmId::convert_spanned(
+                        &pub_key_algo_id,
+                        converter,
+                    )?,
+                    fingerprint,
+                }
+            }
+            Subpkt::Issuer(key_id) => Self::IssuerKeyId(KeyId::convert_spanned(key_id, converter)?),
+            Subpkt::NotationData(notation_data) => Self::NotationData {
+                flags: BitFlags::<NotationDataFlag>::convert_spanned(
+                    notation_data.flags(),
+                    converter,
+                )?,
+                name_length: converter.next_span_with(notation_data.name().len().try_into()?)?,
+                value_length: converter.next_span_with(notation_data.value().len().try_into()?)?,
+                name: converter.next_span_with(notation_data.name().to_string())?,
+                value: converter.next_span_with(notation_data.value().to_vec())?,
+            },
+            Subpkt::PreferredHashAlgorithms(algos) => Self::PreferredHashAlgorithms(
+                Vec::<Span<HashAlgorithmId>>::convert_spanned(&&**algos, converter)?,
+            ),
+            Subpkt::PreferredCompressionAlgorithms(algos) => Self::PreferredCompressionAlgorithms(
+                Vec::<Span<CompressionAlgorithmId>>::convert_spanned(&&**algos, converter)?,
+            ),
+            Subpkt::KeyServerPreferences(flags) => Self::KeyServerPreferences(
+                KeyServerPreferencesFlags::convert_spanned(flags, converter)?,
+            ),
+            Subpkt::PreferredKeyServer(uri) => Self::PreferredKeyServer(
+                converter.next_span_with(String::from_utf8_lossy(uri).to_string())?,
+            ),
+            Subpkt::PrimaryUserID(primary) => {
+                Self::PrimaryUserId(converter.next_span_with(*primary)?)
+            }
+            Subpkt::PolicyURI(uri) => {
+                Self::PolicyUri(converter.next_span_with(String::from_utf8_lossy(uri).to_string())?)
+            }
+            Subpkt::KeyFlags(flags) => {
+                Self::KeyFlags(KeyFlagsFlags::convert_spanned(flags, converter)?)
+            }
+            Subpkt::SignersUserID(user_id) => Self::SignerUserId(
+                converter.next_span_with(String::from_utf8_lossy(user_id).to_string())?,
+            ),
+            Subpkt::ReasonForRevocation { code, reason } => Self::RevocationReason {
+                code: RevocationCode::convert_spanned(code, converter)?,
+                reason: converter.next_span_with(String::from_utf8_lossy(reason).to_string())?,
+            },
+            Subpkt::Features(flags) => {
+                Self::Features(FeaturesFlags::convert_spanned(flags, converter)?)
+            }
+            Subpkt::SignatureTarget {
+                pk_algo,
+                hash_algo,
+                digest,
+            } => Self::SignatureTarget {
+                pub_key_algo_id: PublicKeyAlgorithmId::convert_spanned(pk_algo, converter)?,
+                hash_algo_id: HashAlgorithmId::convert_spanned(hash_algo, converter)?,
+                hash: converter.next_span_with(digest.clone())?,
+            },
+            Subpkt::EmbeddedSignature(signature) => {
+                let signature = {
+                    let signature = Signature::convert_spanned(signature, converter)?;
+                    let (span, signature) = signature.take();
+                    span.replace_with(Box::new(signature))
+                };
+                Self::EmbeddedSignature(signature)
+            }
+            Subpkt::IssuerFingerprint(fingerprint) => Self::IssuerFingerprint {
+                version: converter.next_span_with(PhantomData)?,
+                fingerprint: Fingerprint::convert_spanned(fingerprint, converter)?,
+            },
+            Subpkt::IntendedRecipient(fingerprint) => Self::IntendedRecipientFingerprint {
+                version: converter.next_span_with(PhantomData)?,
+                fingerprint: Fingerprint::convert_spanned(fingerprint, converter)?,
+            },
+            Subpkt::PreferredAEADCiphersuites(suites) => Self::PreferredAeadCiphersuites(
+                Vec::<Span<AeadCiphersuite>>::convert_spanned(&&**suites, converter)?,
+            ),
+            // We cannot just display an unimplemented subpacket, because we don't know
+            // how many spans we should advance.
+            _ => Err(Error::Unimplemented(format!(
+                "unimplemented signature subpacket {}",
+                from.tag(),
+            )))?,
+        };
+        Ok(ret)
+    }
+}
+
+impl Convert<pgp::packet::signature::subpacket::NotationDataFlags> for BitFlags<NotationDataFlag> {
+    fn convert_spanned(
+        from: &pgp::packet::signature::subpacket::NotationDataFlags,
+        converter: &mut Converter,
+    ) -> Result<Span<Self>>
+    where
+        Self: Sized,
+    {
+        let flags = {
+            let flags: [u8; 4] = from.as_bitfield().as_bytes().try_into()?;
+            u32::from_be_bytes(flags)
+        };
+        converter.next_span_with(Self::from_bits(flags).map_err(Into::<BitflagsError>::into)?)
+    }
+
+    fn convert(
+        _from: &pgp::packet::signature::subpacket::NotationDataFlags,
+        _converter: &mut Converter,
+    ) -> Result<Self>
+    where
+        Self: Sized,
+    {
+        unreachable!()
+    }
+}
+
+macro_rules! gen_bitflags_convert_impls {
+    { $( $from:ty => $to:ty : $n_octets:literal ),+ $(,)? } => {
+        $(
+            impl Convert<$from> for $to {
+                fn convert_spanned(from: &$from, converter: &mut Converter) -> Result<Span<Self>>
+                where
+                    Self: Sized,
+                {
+                    let flags = from.as_bitfield().as_bytes();
+                    let span = converter.next_span()?;
+                    let offset = span.offset;
+
+                    seq!(N in 0..$n_octets {
+                        let flags~N = BitFlags::<$to~N>::from_bits(*flags.get(N).unwrap_or(&0))
+                            .map_err(Into::<BitflagsError>::into)?;
+                        let span~N = Span::new(offset + N, 1, flags~N);
+                    });
+
+                    seq!(N in 0..$n_octets {
+                        Ok(span.replace_with(Self(
+                            #( span~N, )*
+                        )))
+                    })
+                }
+
+                fn convert(_from: &$from, _converter: &mut Converter) -> Result<Self>
+                where
+                    Self: Sized,
+                {
+                    unreachable!()
+                }
+            }
+        )+
+    };
+}
+
+gen_bitflags_convert_impls! {
+    pgp::types::KeyServerPreferences => KeyServerPreferencesFlags: 1,
+    pgp::types::KeyFlags => KeyFlagsFlags: 2,
+    pgp::types::Features => FeaturesFlags: 1,
+}
+
+impl Convert<&[(pgp::crypto::SymmetricAlgorithm, pgp::crypto::AEADAlgorithm)]>
+    for Vec<Span<AeadCiphersuite>>
+{
+    fn convert_spanned(
+        from: &&[(pgp::crypto::SymmetricAlgorithm, pgp::crypto::AEADAlgorithm)],
+        converter: &mut Converter,
+    ) -> Result<Span<Self>>
+    where
+        Self: Sized,
+    {
+        let span = converter.next_span()?;
+        let offset = span.offset;
+
+        let ret = from
+            .iter()
+            // From `sequoia-openpgp` to our types.
+            .map(|(sym, aead)| ((*sym).into(), (*aead).into()))
+            .map(|(sym, aead): (u8, u8)| {
+                (
+                    sym.try_into()
+                        .map_err(|_| Error::Unimplemented(format!("symmetric algorithm {sym}",))),
+                    aead.try_into()
+                        .map_err(|_| Error::Unimplemented(format!("AEAD algorithm {aead}",))),
+                )
+            })
+            .enumerate()
+            // Make every octet spanned.
+            .map(|(idx, (sym, aead))| {
+                (
+                    sym.map(|sym| Span::new(offset + idx * 2, 1, sym)),
+                    aead.map(|aead| Span::new(offset + 1 + idx * 2, 1, aead)),
+                )
+            })
+            // Merge results.
+            .map(|result| match result {
+                (Ok(sym), Ok(aead)) => Ok((sym, aead).into()),
+                (Err(err), _) | (_, Err(err)) => Err(err),
+            })
+            .enumerate()
+            .map(|(idx, suite)| suite.map(|suite| Span::new(offset + idx * 2, 2, suite)))
+            .collect::<Result<_>>()?;
+
+        Ok(span.replace_with(ret))
+    }
+
+    fn convert(
+        _from: &&[(pgp::crypto::SymmetricAlgorithm, pgp::crypto::AEADAlgorithm)],
+        _converter: &mut Converter,
+    ) -> Result<Self>
+    where
+        Self: Sized,
+    {
+        unreachable!()
+    }
+}
+
+macro_rules! err_wrong_mpis {
+    ($from:ident) => {
+        Err(Error::WrongSignatureMpis {
+            expected: Self::DISPLAY,
+            got: format!("{:#?}", $from),
+        })
+    };
+}
+
+impl Convert<pgp::crypto::mpi::Signature> for SignatureMpisRsa {
+    fn convert(from: &pgp::crypto::mpi::Signature, converter: &mut Converter) -> Result<Self>
+    where
+        Self: Sized,
+    {
+        if let pgp::crypto::mpi::Signature::RSA { s } = from {
+            let s = Mpi::convert_spanned(s, converter)?;
+            return Ok(Self(s));
+        }
+
+        err_wrong_mpis!(from)
+    }
+}
+
+impl Convert<pgp::crypto::mpi::Signature> for SignatureMpisRS {
+    fn convert(from: &pgp::crypto::mpi::Signature, converter: &mut Converter) -> Result<Self>
+    where
+        Self: Sized,
+    {
+        if let pgp::crypto::mpi::Signature::DSA { r, s }
+        | pgp::crypto::mpi::Signature::ECDSA { r, s }
+        | pgp::crypto::mpi::Signature::EdDSA { r, s } = from
+        {
+            let r = Mpi::convert_spanned(r, converter)?;
+            let s = Mpi::convert_spanned(s, converter)?;
+            return Ok(Self { r, s });
+        }
+
+        err_wrong_mpis!(from)
+    }
+}
+
+impl Convert<pgp::crypto::mpi::Signature> for SignatureMpisEd25519 {
+    fn convert(from: &pgp::crypto::mpi::Signature, converter: &mut Converter) -> Result<Self>
+    where
+        Self: Sized,
+    {
+        if let pgp::crypto::mpi::Signature::Ed25519 { s } = from {
+            let s = converter.next_span_with(**s)?;
+            return Ok(Self(s));
+        }
+
+        err_wrong_mpis!(from)
+    }
+}
+
 macro_rules! convert_key {
     { $conversion:tt } => {
         impl Convert<pgp::packet::Key<pgp_key::PublicParts, pgp_key::PrimaryRole>> for PublicKey {
@@ -411,8 +910,8 @@ macro_rules! convert_key {
                 _ => {
                     let key_material = $converter.spanned(|converter| {
                         // Exhaust all remaining spans.
-                        while let Ok(_) = converter.next_span() {}
-                        Ok(UnimplementedPublicKeyAlgorithm)
+                        while converter.next_span().is_ok() {}
+                        Ok(PublicKeyAlgorithmUnimplemented)
                     })?;
                     Self::Version4Unimplemented(
                         PublicVersion4::new(
@@ -438,6 +937,43 @@ convert_key! {{
     X25519 => Version4X25519(X25519);
     Ed25519 => Version4Ed25519(Ed25519);
 }}
+
+impl Convert<pgp::types::Timestamp> for Time {
+    fn convert_spanned(
+        from: &pgp::types::Timestamp,
+        converter: &mut Converter,
+    ) -> Result<Span<Self>>
+    where
+        Self: Sized,
+    {
+        let time = (*from).into();
+        converter.next_span_with(Self(time))
+    }
+
+    fn convert(_from: &pgp::types::Timestamp, _converter: &mut Converter) -> Result<Self>
+    where
+        Self: Sized,
+    {
+        unreachable!()
+    }
+}
+
+impl Convert<pgp::types::Duration> for Time {
+    fn convert_spanned(from: &pgp::types::Duration, converter: &mut Converter) -> Result<Span<Self>>
+    where
+        Self: Sized,
+    {
+        let time = (*from).into();
+        converter.next_span_with(Self(time))
+    }
+
+    fn convert(_from: &pgp::types::Duration, _converter: &mut Converter) -> Result<Self>
+    where
+        Self: Sized,
+    {
+        unreachable!()
+    }
+}
 
 impl<R> Convert<pgp::packet::Key<pgp_key::PublicParts, R>> for Time
 where
@@ -563,6 +1099,65 @@ impl Convert<pgp::crypto::mpi::MPI> for Mpi {
     }
 }
 
+impl Convert<pgp::Fingerprint> for Fingerprint {
+    fn convert_spanned(from: &pgp::Fingerprint, converter: &mut Converter) -> Result<Span<Self>>
+    where
+        Self: Sized,
+    {
+        let ret = match from {
+            pgp::Fingerprint::V6(bytes) => Self::Version6(FingerprintVersion6(*bytes)),
+            pgp::Fingerprint::V4(bytes) => Self::Version4(FingerprintVersion4(*bytes)),
+            pgp::Fingerprint::Unknown {
+                version: Some(3),
+                bytes,
+            } => {
+                let length = bytes.len();
+                if length != Fingerprint::VERSION_3_LEN {
+                    Err(Error::WrongFingerprintLength { version: 3, length })?;
+                }
+                Self::Version3(FingerprintVersion3((**bytes).try_into().unwrap()))
+            }
+            pgp::Fingerprint::Unknown {
+                version: Some(version),
+                ..
+            } => Err(Error::Unimplemented(format!(
+                "fingerprint version {version}"
+            )))?,
+            _ => Err(Error::Unimplemented(
+                "fingerprint version unknown".to_string(),
+            ))?,
+        };
+        converter.next_span_with(ret)
+    }
+
+    fn convert(_from: &pgp::Fingerprint, _converter: &mut Converter) -> Result<Self>
+    where
+        Self: Sized,
+    {
+        unreachable!()
+    }
+}
+
+impl Convert<pgp::KeyID> for KeyId {
+    fn convert_spanned(from: &pgp::KeyID, converter: &mut Converter) -> Result<Span<Self>>
+    where
+        Self: Sized,
+    {
+        let octets = match from {
+            pgp::KeyID::Long(octets) => converter.next_span_with(*octets)?,
+            _ => Err(Error::InvalidKeyId)?,
+        };
+        Ok(octets.replace_with(Self(octets.inner)))
+    }
+
+    fn convert(_from: &pgp::KeyID, _converter: &mut Converter) -> Result<Self>
+    where
+        Self: Sized,
+    {
+        unreachable!()
+    }
+}
+
 impl Convert<pgp::crypto::Curve> for CurveOid {
     fn convert(from: &pgp::crypto::Curve, converter: &mut Converter) -> Result<Self>
     where
@@ -628,82 +1223,99 @@ impl
     }
 }
 
-impl Convert<pgp::crypto::SymmetricAlgorithm> for SymmetricKeyAlgorithmId {
-    fn convert_spanned(
-        from: &pgp::crypto::SymmetricAlgorithm,
-        converter: &mut Converter,
-    ) -> Result<Span<Self>>
-    where
-        Self: Sized,
-    {
-        converter.next_span_with(match from {
-            pgp::crypto::SymmetricAlgorithm::Unencrypted => Self::Plaintext,
-            #[expect(deprecated)]
-            pgp::crypto::SymmetricAlgorithm::IDEA => Self::Idea,
-            #[expect(deprecated)]
-            pgp::crypto::SymmetricAlgorithm::TripleDES => Self::TripleDes,
-            #[expect(deprecated)]
-            pgp::crypto::SymmetricAlgorithm::CAST5 => Self::Cast5,
-            pgp::crypto::SymmetricAlgorithm::Blowfish => Self::Blowfish,
-            pgp::crypto::SymmetricAlgorithm::AES128 => Self::Aes128,
-            pgp::crypto::SymmetricAlgorithm::AES192 => Self::Aes192,
-            pgp::crypto::SymmetricAlgorithm::AES256 => Self::Aes256,
-            pgp::crypto::SymmetricAlgorithm::Twofish => Self::Twofish,
-            pgp::crypto::SymmetricAlgorithm::Camellia128 => Self::Camellia128,
-            pgp::crypto::SymmetricAlgorithm::Camellia192 => Self::Camellia192,
-            pgp::crypto::SymmetricAlgorithm::Camellia256 => Self::Camellia256,
-            _ => {
-                let symmetric_id: u8 = (*from).into();
-                return Err(Error::Unimplemented(format!(
-                    "symmetric algorithm id: {}",
-                    symmetric_id
-                )));
-            }
-        })
-    }
+macro_rules! gen_convert_vec_span_id {
+    { $( $from:ty => $to:ty ),+ $(,)? } => {
+        $(
+            impl Convert<&[$from]> for Vec<Span<$to>> {
+                fn convert_spanned(
+                    from: &&[$from],
+                    converter: &mut Converter,
+                ) -> Result<Span<Self>>
+                where
+                    Self: Sized,
+                {
+                    let span = converter.next_span()?;
+                    let Span { offset, .. } = span;
+                    let ids = from
+                        .iter()
+                        .map(|id| {
+                            // From `sequoia-openpgp` to our type.
+                            let id: u8 = (*id).into();
+                            id.try_into()
+                                .map_err(|_| Error::Unimplemented(id.to_string()))
+                        })
+                        .enumerate()
+                        .map(|(idx, id)| {
+                            // Make every octet spanned.
+                            id.map(|id| Span {
+                                offset: offset + idx,
+                                length: 1,
+                                inner: id,
+                            })
+                        })
+                        .collect::<Result<_>>()?;
+                    Ok(span.replace_with(ids))
+                }
 
-    fn convert(_from: &pgp::crypto::SymmetricAlgorithm, _converter: &mut Converter) -> Result<Self>
-    where
-        Self: Sized,
-    {
-        unreachable!()
-    }
+                fn convert(
+                    _from: &&[$from],
+                    _converter: &mut Converter,
+                ) -> Result<Self>
+                where
+                    Self: Sized,
+                {
+                    unreachable!()
+                }
+            }
+        )+
+    };
 }
 
-impl Convert<pgp::crypto::HashAlgorithm> for HashAlgorithmId {
-    fn convert_spanned(
-        from: &pgp::crypto::HashAlgorithm,
-        converter: &mut Converter,
-    ) -> Result<Span<Self>>
-    where
-        Self: Sized,
-    {
-        converter.next_span_with(match from {
-            pgp::crypto::HashAlgorithm::MD5 => Self::Md5,
-            pgp::crypto::HashAlgorithm::SHA1 => Self::Sha1,
-            pgp::crypto::HashAlgorithm::RipeMD => Self::Ripemd160,
-            pgp::crypto::HashAlgorithm::SHA256 => Self::Sha2_256,
-            pgp::crypto::HashAlgorithm::SHA384 => Self::Sha2_384,
-            pgp::crypto::HashAlgorithm::SHA512 => Self::Sha2_512,
-            pgp::crypto::HashAlgorithm::SHA224 => Self::Sha2_224,
-            pgp::crypto::HashAlgorithm::SHA3_256 => Self::Sha3_256,
-            pgp::crypto::HashAlgorithm::SHA3_512 => Self::Sha3_512,
-            _ => {
-                let hash_id: u8 = (*from).into();
-                return Err(Error::Unimplemented(format!(
-                    "hash algorithm id: {}",
-                    hash_id
-                )));
-            }
-        })
-    }
+gen_convert_vec_span_id! {
+    pgp::crypto::SymmetricAlgorithm => SymmetricKeyAlgorithmId,
+    pgp::types::CompressionAlgorithm => CompressionAlgorithmId,
+    pgp::crypto::HashAlgorithm => HashAlgorithmId,
+    pgp::crypto::AEADAlgorithm => AeadAlgorithmId,
+}
 
-    fn convert(_from: &pgp::crypto::HashAlgorithm, _converter: &mut Converter) -> Result<Self>
-    where
-        Self: Sized,
-    {
-        unreachable!()
-    }
+macro_rules! gen_id_convert_impls {
+    { $( $from:ty => $to:ty ),+ $(,)? } => {
+        $(
+            impl Convert<$from> for $to {
+                fn convert_spanned(
+                    from: &$from,
+                    converter: &mut Converter,
+                ) -> Result<Span<Self>>
+                where
+                    Self: Sized,
+                {
+                    let id: u8 = (*from).into();
+                    let id = id
+                        .try_into()
+                        .map_err(|_| Error::Unimplemented(id.to_string()))?;
+                    converter.next_span_with(id)
+                }
+
+                fn convert(_from: &$from, _converter: &mut Converter) -> Result<Self>
+                where
+                    Self: Sized,
+                {
+                    unreachable!()
+                }
+            }
+        )*
+    };
+}
+
+gen_id_convert_impls! {
+    pgp::types::SignatureType => SignatureTypeId,
+    pgp::packet::signature::subpacket::SubpacketTag => SignatureSubpacketTypeId,
+    pgp::types::ReasonForRevocation => RevocationCode,
+    pgp::crypto::PublicKeyAlgorithm => PublicKeyAlgorithmId,
+    pgp::crypto::SymmetricAlgorithm => SymmetricKeyAlgorithmId,
+    pgp::types::CompressionAlgorithm => CompressionAlgorithmId,
+    pgp::crypto::HashAlgorithm => HashAlgorithmId,
+    pgp::crypto::AEADAlgorithm => AeadAlgorithmId,
 }
 
 impl Convert<pgp::packet::UserID> for UserId {
@@ -751,14 +1363,13 @@ mod tests {
     /// ```
     macro_rules! assert_convert {
         ({ $from:expr => $fields:literal @ $to:ty }) => {
-            // Ensure exact number of fields.
-            let mut context = Context::new();
-            let mut converter = Converter::new(&mut context, vec![1; $fields - 1]);
-            assert!(<$to>::convert_spanned(&$from, &mut converter).is_err());
-
             let mut context = Context::new();
             let mut converter = Converter::new(&mut context, vec![1; $fields]);
             let value = <$to>::convert_spanned(&$from, &mut converter).unwrap();
+
+            // Ensure exact number of fields.
+            assert!(converter.next_span().is_err());
+
             insta_assert!(value);
         };
 
@@ -872,6 +1483,369 @@ mod tests {
 
         body {
             () => 1 @ Body<DummyPacket>
+        }
+
+        signature_v4_rsa {
+            pgp::packet::Signature::V4(
+                pgp::packet::signature::Signature4::new(
+                    pgp::types::SignatureType::Text,
+                    pgp::crypto::PublicKeyAlgorithm::RSAEncryptSign,
+                    pgp::crypto::HashAlgorithm::SHA256,
+                    pgp::packet::signature::subpacket::SubpacketArea::new(
+                        vec![
+                            pgp::packet::signature::subpacket::Subpacket::new(
+                                pgp::packet::signature::subpacket::SubpacketValue::Revocable(false),
+                                true,
+                            ).unwrap(),
+                        ]
+                    ).unwrap(),
+                    pgp::packet::signature::subpacket::SubpacketArea::new(vec![]).unwrap(),
+                    [0, 1],
+                    pgp::crypto::mpi::Signature::RSA {
+                        s: pgp::crypto::mpi::MPI::new(&[1, 2, 3]),
+                    },
+                )
+            ) => 13 @ Signature
+        }
+
+        signature_v4_eddsa {
+            pgp::packet::Signature::V4(
+                pgp::packet::signature::Signature4::new(
+                    pgp::types::SignatureType::Text,
+                    pgp::crypto::PublicKeyAlgorithm::EdDSA,
+                    pgp::crypto::HashAlgorithm::SHA256,
+                    pgp::packet::signature::subpacket::SubpacketArea::new(
+                        vec![
+                            pgp::packet::signature::subpacket::Subpacket::new(
+                                pgp::packet::signature::subpacket::SubpacketValue::Revocable(false),
+                                true,
+                            ).unwrap(),
+                        ]
+                    ).unwrap(),
+                    pgp::packet::signature::subpacket::SubpacketArea::new(vec![]).unwrap(),
+                    [0, 1],
+                    pgp::crypto::mpi::Signature::EdDSA {
+                        r: pgp::crypto::mpi::MPI::new(&[1, 2, 3]),
+                        s: pgp::crypto::mpi::MPI::new(&[4, 5, 6]),
+                    },
+                )
+            ) => 15 @ Signature
+        }
+
+        signature_v4_ed25519 {
+            pgp::packet::Signature::V4(
+                pgp::packet::signature::Signature4::new(
+                    pgp::types::SignatureType::Text,
+                    pgp::crypto::PublicKeyAlgorithm::Ed25519,
+                    pgp::crypto::HashAlgorithm::SHA256,
+                    pgp::packet::signature::subpacket::SubpacketArea::new(
+                        vec![
+                            pgp::packet::signature::subpacket::Subpacket::new(
+                                pgp::packet::signature::subpacket::SubpacketValue::Revocable(false),
+                                true,
+                            ).unwrap(),
+                        ]
+                    ).unwrap(),
+                    pgp::packet::signature::subpacket::SubpacketArea::new(vec![]).unwrap(),
+                    [0, 1],
+                    pgp::crypto::mpi::Signature::Ed25519 {
+                        s: Box::new([1; 64]),
+                    },
+                )
+            ) => 12 @ Signature
+        }
+
+        // Using DSA as we will not implement it anytime soon.
+        signature_v4_unimplemented {
+            pgp::packet::Signature::V4(
+                pgp::packet::signature::Signature4::new(
+                    pgp::types::SignatureType::Text,
+                    #[expect(deprecated)]
+                    pgp::crypto::PublicKeyAlgorithm::DSA,
+                    pgp::crypto::HashAlgorithm::SHA256,
+                    pgp::packet::signature::subpacket::SubpacketArea::new(
+                        vec![
+                            pgp::packet::signature::subpacket::Subpacket::new(
+                                pgp::packet::signature::subpacket::SubpacketValue::Revocable(false),
+                                true,
+                            ).unwrap(),
+                        ]
+                    ).unwrap(),
+                    pgp::packet::signature::subpacket::SubpacketArea::new(vec![]).unwrap(),
+                    [0, 1],
+                    pgp::crypto::mpi::Signature::DSA {
+                        r: pgp::crypto::mpi::MPI::new(&[1, 2, 3]),
+                        s: pgp::crypto::mpi::MPI::new(&[4, 5, 6]),
+                    },
+                )
+            // Any number greater than 10 passes the test, because all
+            // remaining spans are drained in the case of an unimplemented
+            // signature, no matter how much there is. TODO: Find a way to
+            // ensure the number is the same as what `sequoia-openpgp` would
+            // return.
+            ) => 15 @ Signature
+        }
+
+        signature_subpackets_empty {
+            pgp::packet::signature::subpacket::SubpacketArea::new(
+                vec![]
+            ).unwrap() => 0 @ SignatureSubpackets
+        }
+
+        signature_subpackets_1 {
+            pgp::packet::signature::subpacket::SubpacketArea::new(
+                vec![
+                    pgp::packet::signature::subpacket::Subpacket::new(
+                        pgp::packet::signature::subpacket::SubpacketValue::Revocable(false),
+                        true,
+                    ).unwrap(),
+                ]
+            ).unwrap() => 3 @ SignatureSubpackets
+        }
+
+        signature_subpackets_3 {
+            pgp::packet::signature::subpacket::SubpacketArea::new(
+                vec![
+                    pgp::packet::signature::subpacket::Subpacket::new(
+                        pgp::packet::signature::subpacket::SubpacketValue::Revocable(false),
+                        true,
+                    ).unwrap(),
+                    pgp::packet::signature::subpacket::Subpacket::new(
+                        pgp::packet::signature::subpacket::SubpacketValue::TrustSignature {
+                            level: 255,
+                            trust: 120,
+                        },
+                        false,
+                    ).unwrap(),
+                    pgp::packet::signature::subpacket::Subpacket::new(
+                        pgp::packet::signature::subpacket::SubpacketValue::PrimaryUserID(true),
+                        true,
+                    ).unwrap(),
+                ]
+            ).unwrap() => 10 @ SignatureSubpackets
+        }
+
+        // `SignatureSubpacket` and `SignatureSubpacketTypeIdOctet` are not
+        // tested individually because they have been tested with
+        // `signature_subpackets_*`.
+
+        sig_subpkt_signature_creation_time {
+            pgp::packet::signature::subpacket::SubpacketValue::SignatureCreationTime(
+                pgp::types::Timestamp::from(0),
+            ) => 1 @ SignatureSubpacketData
+        }
+
+        sig_subpkt_signature_signature_expiration_time {
+            pgp::packet::signature::subpacket::SubpacketValue::SignatureExpirationTime(
+                pgp::types::Duration::from(0),
+            ) => 1 @ SignatureSubpacketData
+        }
+
+        sig_subpkt_signature_exportable_certification {
+            pgp::packet::signature::subpacket::SubpacketValue::ExportableCertification(
+                true,
+            ) => 1 @ SignatureSubpacketData
+        }
+
+        sig_subpkt_signature_trust_signature {
+            pgp::packet::signature::subpacket::SubpacketValue::TrustSignature {
+                level: 255,
+                trust: 60,
+            } => 2 @ SignatureSubpacketData
+        }
+
+        sig_subpkt_signature_regular_expression {
+            pgp::packet::signature::subpacket::SubpacketValue::RegularExpression(
+                "foo".as_bytes().to_vec(),
+            ) => 1 @ SignatureSubpacketData
+        }
+
+        sig_subpkt_signature_revocable {
+            pgp::packet::signature::subpacket::SubpacketValue::Revocable(
+                false,
+            ) => 1 @ SignatureSubpacketData
+        }
+
+        sig_subpkt_signature_key_expiration_time {
+            pgp::packet::signature::subpacket::SubpacketValue::KeyExpirationTime(
+                pgp::types::Duration::from(1),
+            ) => 1 @ SignatureSubpacketData
+        }
+
+        // TODO: Test empty `Vec`s.
+        sig_subpkt_signature_preferred_symmetric_ciphers {
+            pgp::packet::signature::subpacket::SubpacketValue::PreferredSymmetricAlgorithms(
+                vec![
+                    pgp::crypto::SymmetricAlgorithm::AES256,
+                    pgp::crypto::SymmetricAlgorithm::AES192,
+                    pgp::crypto::SymmetricAlgorithm::AES128,
+                ],
+            // Provided as one span, though we have split it into several ones.
+            ) => 1 @ SignatureSubpacketData
+        }
+
+        sig_subpkt_signature_revocation_key {
+            pgp::packet::signature::subpacket::SubpacketValue::RevocationKey(
+                pgp::types::RevocationKey::new(
+                    pgp::crypto::PublicKeyAlgorithm::Ed25519,
+                    pgp::Fingerprint::V4([1; 20]),
+                    true,
+                ),
+            ) => 3 @ SignatureSubpacketData
+        }
+
+        sig_subpkt_signature_issuer_key_id {
+            pgp::packet::signature::subpacket::SubpacketValue::Issuer(
+                pgp::KeyID::from_bytes(&[1; 8]),
+            ) => 1 @ SignatureSubpacketData
+        }
+
+        sig_subpkt_signature_notation_data {
+            pgp::packet::signature::subpacket::SubpacketValue::NotationData(
+                pgp::packet::signature::subpacket::NotationData::new(
+                    "foo@example.com",
+                    "DEADBEEF",
+                    Some(
+                        pgp::packet::signature::subpacket::NotationDataFlags::empty()
+                            .set_human_readable()
+                    ),
+                ),
+            ) => 5 @ SignatureSubpacketData
+        }
+
+        sig_subpkt_signature_preferred_hash_algorithms {
+            pgp::packet::signature::subpacket::SubpacketValue::PreferredHashAlgorithms(
+                vec![
+                    pgp::crypto::HashAlgorithm::SHA512,
+                    pgp::crypto::HashAlgorithm::SHA384,
+                    pgp::crypto::HashAlgorithm::SHA256,
+                ],
+            // Provided as one span, though we have split it into several ones.
+            ) => 1 @ SignatureSubpacketData
+        }
+
+        sig_subpkt_signature_preferred_compression_algorithms {
+            pgp::packet::signature::subpacket::SubpacketValue::PreferredCompressionAlgorithms(
+                vec![
+                    pgp::types::CompressionAlgorithm::Zlib,
+                    pgp::types::CompressionAlgorithm::Zip,
+                    pgp::types::CompressionAlgorithm::Uncompressed,
+                ],
+            // Provided as one span, though we have split it into several ones.
+            ) => 1 @ SignatureSubpacketData
+        }
+
+        sig_subpkt_signature_key_server_preferences {
+            pgp::packet::signature::subpacket::SubpacketValue::KeyServerPreferences(
+                pgp::types::KeyServerPreferences::empty().set_no_modify(),
+            ) => 1 @ SignatureSubpacketData
+        }
+
+        sig_subpkt_signature_preferred_key_server {
+            pgp::packet::signature::subpacket::SubpacketValue::PreferredKeyServer(
+                "hkps://keyserver.example.com/".as_bytes().to_vec(),
+            ) => 1 @ SignatureSubpacketData
+        }
+
+        sig_subpkt_signature_primary_user_id {
+            pgp::packet::signature::subpacket::SubpacketValue::PrimaryUserID(
+                true,
+            ) => 1 @ SignatureSubpacketData
+        }
+
+        sig_subpkt_signature_policy_uri {
+            pgp::packet::signature::subpacket::SubpacketValue::PolicyURI(
+                "https://example.com/policy/".as_bytes().to_vec(),
+            ) => 1 @ SignatureSubpacketData
+        }
+
+        sig_subpkt_signature_key_flags_1 {
+            pgp::packet::signature::subpacket::SubpacketValue::KeyFlags(
+                pgp::types::KeyFlags::new([0b1011_1111, 0]),
+            // Provided as one span, though we have split it into several ones.
+            ) => 1 @ SignatureSubpacketData
+        }
+
+        sig_subpkt_signature_key_flags_2 {
+            pgp::packet::signature::subpacket::SubpacketValue::KeyFlags(
+                pgp::types::KeyFlags::new([0b1011_1111, 0b1100]),
+            // Provided as one span, though we have split it into several ones.
+            ) => 1 @ SignatureSubpacketData
+        }
+
+        sig_subpkt_signature_signer_user_id {
+            pgp::packet::signature::subpacket::SubpacketValue::SignersUserID(
+                "John <john@example.com>".as_bytes().to_vec(),
+            ) => 1 @ SignatureSubpacketData
+        }
+
+        sig_subpkt_signature_revocation_reason {
+            pgp::packet::signature::subpacket::SubpacketValue::ReasonForRevocation {
+                code: pgp::types::ReasonForRevocation::UIDRetired,
+                reason: "UID changed.".as_bytes().to_vec(),
+            } => 2 @ SignatureSubpacketData
+        }
+
+        sig_subpkt_signature_features {
+            pgp::packet::signature::subpacket::SubpacketValue::Features(
+                pgp::types::Features::new([0x0F]),
+            ) => 1 @ SignatureSubpacketData
+        }
+
+        sig_subpkt_signature_signature_target {
+            pgp::packet::signature::subpacket::SubpacketValue::SignatureTarget {
+                pk_algo: pgp::crypto::PublicKeyAlgorithm::Ed25519,
+                hash_algo: pgp::crypto::HashAlgorithm::SHA3_512,
+                digest: "DEADBEEF".as_bytes().to_vec(),
+            } => 3 @ SignatureSubpacketData
+        }
+
+        sig_subpkt_signature_embedded_signature {
+            pgp::packet::signature::subpacket::SubpacketValue::EmbeddedSignature(
+                pgp::packet::signature::Signature4::new(
+                    pgp::types::SignatureType::Text,
+                    pgp::crypto::PublicKeyAlgorithm::RSAEncryptSign,
+                    pgp::crypto::HashAlgorithm::SHA256,
+                    pgp::packet::signature::subpacket::SubpacketArea::new(vec![]).unwrap(),
+                    pgp::packet::signature::subpacket::SubpacketArea::new(vec![]).unwrap(),
+                    [0, 1],
+                    pgp::crypto::mpi::Signature::RSA {
+                        s: pgp::crypto::mpi::MPI::new(&[1, 2, 3]),
+                    },
+                ).into()
+            ) => 10 @ SignatureSubpacketData
+        }
+
+        sig_subpkt_signature_issuer_fingerprint {
+            pgp::packet::signature::subpacket::SubpacketValue::IssuerFingerprint(
+                pgp::Fingerprint::V4([1; 20]),
+            ) => 2 @ SignatureSubpacketData
+        }
+
+        sig_subpkt_signature_intended_recipient_fingerprint {
+            pgp::packet::signature::subpacket::SubpacketValue::IntendedRecipient(
+                pgp::Fingerprint::V4([1; 20]),
+            ) => 2 @ SignatureSubpacketData
+        }
+
+        sig_subpkt_signature_preferred_aead_ciphersuites {
+            pgp::packet::signature::subpacket::SubpacketValue::PreferredAEADCiphersuites(
+                vec![
+                    (
+                        pgp::crypto::SymmetricAlgorithm::AES256,
+                        pgp::crypto::AEADAlgorithm::EAX,
+                    ),
+                    (
+                        pgp::crypto::SymmetricAlgorithm::AES192,
+                        pgp::crypto::AEADAlgorithm::OCB,
+                    ),
+                    (
+                        pgp::crypto::SymmetricAlgorithm::AES128,
+                        pgp::crypto::AEADAlgorithm::GCM,
+                    ),
+                ],
+            // Provided as one span, though we have split it into several ones.
+            ) => 1 @ SignatureSubpacketData
         }
 
         // Each algorithm is tested in its own test.

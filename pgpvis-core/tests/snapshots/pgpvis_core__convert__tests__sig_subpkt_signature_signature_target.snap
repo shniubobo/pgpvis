@@ -1,0 +1,28 @@
+---
+source: pgpvis-core/src/convert.rs
+expression: value
+---
+offset: 0
+length: 3
+inner:
+  SignatureTarget:
+    pub_key_algo_id:
+      offset: 0
+      length: 1
+      inner: 27
+    hash_algo_id:
+      offset: 1
+      length: 1
+      inner: Sha3_512
+    hash:
+      offset: 2
+      length: 1
+      inner:
+        - 68
+        - 69
+        - 65
+        - 68
+        - 66
+        - 69
+        - 69
+        - 70
