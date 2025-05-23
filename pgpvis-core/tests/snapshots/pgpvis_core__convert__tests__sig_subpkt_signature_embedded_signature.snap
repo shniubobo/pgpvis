@@ -3,66 +3,81 @@ source: pgpvis-core/src/convert.rs
 expression: value
 ---
 offset: 0
-length: 10
+length: 12
 inner:
-  EmbeddedSignature:
+  length:
     offset: 0
+    length: 1
+    inner:
+      One: 0
+  type_id:
+    offset: 1
+    length: 1
+    inner:
+      critical: true
+      type_id: ~
+  data:
+    offset: 2
     length: 10
     inner:
-      Version4RsaEncryptSign:
-        version:
-          offset: 0
-          length: 1
-          inner: ~
-        type_id:
-          offset: 1
-          length: 1
-          inner: Text
-        pub_key_algo_id:
-          offset: 2
-          length: 1
-          inner: ~
-        hash_algo_id:
-          offset: 3
-          length: 1
-          inner: Sha2_256
-        hashed_length:
-          offset: 4
-          length: 1
-          inner: 0
-        hashed_subpackets:
-          offset: 5
-          length: 0
-          inner: []
-        unhashed_length:
-          offset: 5
-          length: 1
-          inner: 0
-        unhashed_subpackets:
-          offset: 6
-          length: 0
-          inner: []
-        hash_prefix:
-          offset: 6
-          length: 2
-          inner:
-            - 0
-            - 1
-        mpis:
-          offset: 8
-          length: 2
-          inner:
-            offset: 8
-            length: 2
-            inner:
-              length:
-                offset: 8
-                length: 1
-                inner: 17
-              integers:
-                offset: 9
-                length: 1
+      EmbeddedSignature:
+        offset: 2
+        length: 10
+        inner:
+          Version4RsaEncryptSign:
+            version:
+              offset: 2
+              length: 1
+              inner: ~
+            type_id:
+              offset: 3
+              length: 1
+              inner: Text
+            pub_key_algo_id:
+              offset: 4
+              length: 1
+              inner: ~
+            hash_algo_id:
+              offset: 5
+              length: 1
+              inner: Sha2_256
+            hashed_length:
+              offset: 6
+              length: 1
+              inner: 0
+            hashed_subpackets:
+              offset: 7
+              length: 0
+              inner: []
+            unhashed_length:
+              offset: 7
+              length: 1
+              inner: 0
+            unhashed_subpackets:
+              offset: 8
+              length: 0
+              inner: []
+            hash_prefix:
+              offset: 8
+              length: 2
+              inner:
+                - 0
+                - 1
+            mpis:
+              offset: 10
+              length: 2
+              inner:
+                offset: 10
+                length: 2
                 inner:
-                  - 1
-                  - 2
-                  - 3
+                  length:
+                    offset: 10
+                    length: 1
+                    inner: 17
+                  integers:
+                    offset: 11
+                    length: 1
+                    inner:
+                      - 1
+                      - 2
+                      - 3

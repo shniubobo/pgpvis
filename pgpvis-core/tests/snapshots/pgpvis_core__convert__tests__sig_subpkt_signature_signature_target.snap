@@ -1,28 +1,44 @@
 ---
 source: pgpvis-core/src/convert.rs
+assertion_line: 1508
 expression: value
 ---
 offset: 0
-length: 3
+length: 5
 inner:
-  SignatureTarget:
-    pub_key_algo_id:
-      offset: 0
-      length: 1
-      inner: 27
-    hash_algo_id:
-      offset: 1
-      length: 1
-      inner: Sha3_512
-    hash:
-      offset: 2
-      length: 1
-      inner:
-        - 68
-        - 69
-        - 65
-        - 68
-        - 66
-        - 69
-        - 69
-        - 70
+  length:
+    offset: 0
+    length: 1
+    inner:
+      One: 0
+  type_id:
+    offset: 1
+    length: 1
+    inner:
+      critical: true
+      type_id: ~
+  data:
+    offset: 2
+    length: 3
+    inner:
+      SignatureTarget:
+        pub_key_algo_id:
+          offset: 2
+          length: 1
+          inner: 27
+        hash_algo_id:
+          offset: 3
+          length: 1
+          inner: Sha3_512
+        hash:
+          offset: 4
+          length: 1
+          inner:
+            - 68
+            - 69
+            - 65
+            - 68
+            - 66
+            - 69
+            - 69
+            - 70

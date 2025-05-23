@@ -289,8 +289,7 @@ dependencies = [
 [[package]]
 name = "buffered-reader"
 version = "1.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "db26bf1f092fd5e05b5ab3be2f290915aeb6f3f20c4e9f86ce0f07f336c2412f"
+source = "git+https://github.com/shniubobo/sequoia.git?rev=e906c1c7c491b6435aade3bb356a9685ad43f8c4#e906c1c7c491b6435aade3bb356a9685ad43f8c4"
 dependencies = [
  "libc",
 ]
@@ -2128,8 +2127,7 @@ checksum = "1bc711410fbe7399f390ca1c3b60ad0f53f80e95c5eb935e52268a0e2cd49acc"
 [[package]]
 name = "sequoia-openpgp"
 version = "2.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "015e5fc3d023418b9db98ca9a7f3e90b305872eeafe5ca45c5c32b5eb335c1e8"
+source = "git+https://github.com/shniubobo/sequoia.git?rev=e906c1c7c491b6435aade3bb356a9685ad43f8c4#e906c1c7c491b6435aade3bb356a9685ad43f8c4"
 dependencies = [
  "aes",
  "aes-gcm",
@@ -2176,7 +2174,7 @@ dependencies = [
  "sha1collisiondetection",
  "sha2",
  "sha3",
- "thiserror 2.0.12",
+ "thiserror 1.0.69",
  "twofish",
  "typenum",
  "x25519-dalek",

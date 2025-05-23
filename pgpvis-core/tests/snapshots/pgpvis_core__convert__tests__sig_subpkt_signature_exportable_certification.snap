@@ -3,9 +3,24 @@ source: pgpvis-core/src/convert.rs
 expression: value
 ---
 offset: 0
-length: 1
+length: 3
 inner:
-  ExportableCertification:
+  length:
     offset: 0
     length: 1
-    inner: true
+    inner:
+      One: 0
+  type_id:
+    offset: 1
+    length: 1
+    inner:
+      critical: true
+      type_id: ~
+  data:
+    offset: 2
+    length: 1
+    inner:
+      ExportableCertification:
+        offset: 2
+        length: 1
+        inner: true

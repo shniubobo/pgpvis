@@ -3,9 +3,24 @@ source: pgpvis-core/src/convert.rs
 expression: value
 ---
 offset: 0
-length: 1
+length: 3
 inner:
-  PolicyUri:
+  length:
     offset: 0
     length: 1
-    inner: "https://example.com/policy/"
+    inner:
+      One: 0
+  type_id:
+    offset: 1
+    length: 1
+    inner:
+      critical: true
+      type_id: ~
+  data:
+    offset: 2
+    length: 1
+    inner:
+      PolicyUri:
+        offset: 2
+        length: 1
+        inner: "https://example.com/policy/"

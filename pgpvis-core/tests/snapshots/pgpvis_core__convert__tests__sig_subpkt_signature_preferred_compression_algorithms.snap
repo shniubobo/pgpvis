@@ -1,20 +1,36 @@
 ---
 source: pgpvis-core/src/convert.rs
+assertion_line: 1508
 expression: value
 ---
 offset: 0
-length: 1
+length: 3
 inner:
-  PreferredCompressionAlgorithms:
+  length:
     offset: 0
     length: 1
     inner:
-      - offset: 0
+      One: 0
+  type_id:
+    offset: 1
+    length: 1
+    inner:
+      critical: true
+      type_id: ~
+  data:
+    offset: 2
+    length: 1
+    inner:
+      PreferredCompressionAlgorithms:
+        offset: 2
         length: 1
-        inner: Zlib
-      - offset: 1
-        length: 1
-        inner: Zip
-      - offset: 2
-        length: 1
-        inner: Uncompressed
+        inner:
+          - offset: 2
+            length: 1
+            inner: Zlib
+          - offset: 3
+            length: 1
+            inner: Zip
+          - offset: 4
+            length: 1
+            inner: Uncompressed

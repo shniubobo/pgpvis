@@ -1,20 +1,36 @@
 ---
 source: pgpvis-core/src/convert.rs
+assertion_line: 1508
 expression: value
 ---
 offset: 0
-length: 1
+length: 3
 inner:
-  PreferredSymmetricCiphers:
+  length:
     offset: 0
     length: 1
     inner:
-      - offset: 0
+      One: 0
+  type_id:
+    offset: 1
+    length: 1
+    inner:
+      critical: true
+      type_id: ~
+  data:
+    offset: 2
+    length: 1
+    inner:
+      PreferredSymmetricCiphers:
+        offset: 2
         length: 1
-        inner: Aes256
-      - offset: 1
-        length: 1
-        inner: Aes192
-      - offset: 2
-        length: 1
-        inner: Aes128
+        inner:
+          - offset: 2
+            length: 1
+            inner: Aes256
+          - offset: 3
+            length: 1
+            inner: Aes192
+          - offset: 4
+            length: 1
+            inner: Aes128

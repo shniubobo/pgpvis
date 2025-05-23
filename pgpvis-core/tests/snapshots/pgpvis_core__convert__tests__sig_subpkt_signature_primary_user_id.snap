@@ -1,11 +1,27 @@
 ---
 source: pgpvis-core/src/convert.rs
+assertion_line: 1508
 expression: value
 ---
 offset: 0
-length: 1
+length: 3
 inner:
-  PrimaryUserId:
+  length:
     offset: 0
     length: 1
-    inner: true
+    inner:
+      One: 0
+  type_id:
+    offset: 1
+    length: 1
+    inner:
+      critical: true
+      type_id: ~
+  data:
+    offset: 2
+    length: 1
+    inner:
+      PrimaryUserId:
+        offset: 2
+        length: 1
+        inner: true

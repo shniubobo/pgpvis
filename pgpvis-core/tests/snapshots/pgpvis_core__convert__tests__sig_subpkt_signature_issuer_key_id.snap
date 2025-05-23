@@ -3,17 +3,32 @@ source: pgpvis-core/src/convert.rs
 expression: value
 ---
 offset: 0
-length: 1
+length: 3
 inner:
-  IssuerKeyId:
+  length:
     offset: 0
     length: 1
     inner:
-      - 1
-      - 1
-      - 1
-      - 1
-      - 1
-      - 1
-      - 1
-      - 1
+      One: 0
+  type_id:
+    offset: 1
+    length: 1
+    inner:
+      critical: true
+      type_id: ~
+  data:
+    offset: 2
+    length: 1
+    inner:
+      IssuerKeyId:
+        offset: 2
+        length: 1
+        inner:
+          - 1
+          - 1
+          - 1
+          - 1
+          - 1
+          - 1
+          - 1
+          - 1
