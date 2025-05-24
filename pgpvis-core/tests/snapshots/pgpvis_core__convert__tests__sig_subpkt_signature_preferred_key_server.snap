@@ -1,0 +1,27 @@
+---
+source: pgpvis-core/src/convert.rs
+assertion_line: 1508
+expression: value
+---
+offset: 0
+length: 3
+inner:
+  length:
+    offset: 0
+    length: 1
+    inner:
+      One: 0
+  type_id:
+    offset: 1
+    length: 1
+    inner:
+      critical: true
+      type_id: ~
+  data:
+    offset: 2
+    length: 1
+    inner:
+      PreferredKeyServer:
+        offset: 2
+        length: 1
+        inner: "hkps://keyserver.example.com/"

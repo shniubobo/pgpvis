@@ -1,0 +1,78 @@
+---
+source: pgpvis-core/src/convert.rs
+expression: value
+---
+offset: 0
+length: 10
+inner:
+  - offset: 0
+    length: 3
+    inner:
+      length:
+        offset: 0
+        length: 1
+        inner:
+          One: 0
+      type_id:
+        offset: 1
+        length: 1
+        inner:
+          critical: true
+          type_id: ~
+      data:
+        offset: 2
+        length: 1
+        inner:
+          Revocable:
+            offset: 2
+            length: 1
+            inner: false
+  - offset: 3
+    length: 4
+    inner:
+      length:
+        offset: 3
+        length: 1
+        inner:
+          One: 0
+      type_id:
+        offset: 4
+        length: 1
+        inner:
+          critical: false
+          type_id: ~
+      data:
+        offset: 5
+        length: 2
+        inner:
+          TrustSignature:
+            level:
+              offset: 5
+              length: 1
+              inner: 255
+            amount:
+              offset: 6
+              length: 1
+              inner: 120
+  - offset: 7
+    length: 3
+    inner:
+      length:
+        offset: 7
+        length: 1
+        inner:
+          One: 0
+      type_id:
+        offset: 8
+        length: 1
+        inner:
+          critical: true
+          type_id: ~
+      data:
+        offset: 9
+        length: 1
+        inner:
+          PrimaryUserId:
+            offset: 9
+            length: 1
+            inner: true
