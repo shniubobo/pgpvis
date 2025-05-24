@@ -3,7 +3,7 @@ source: pgpvis-core/src/convert.rs
 expression: value
 ---
 offset: 0
-length: 12
+length: 17
 inner:
   length:
     offset: 0
@@ -18,11 +18,11 @@ inner:
       type_id: ~
   data:
     offset: 2
-    length: 10
+    length: 15
     inner:
       EmbeddedSignature:
         offset: 2
-        length: 10
+        length: 15
         inner:
           Version4RsaEncryptSign:
             version:
@@ -43,40 +43,40 @@ inner:
               inner: Sha2_256
             hashed_length:
               offset: 6
-              length: 1
+              length: 2
               inner: 0
             hashed_subpackets:
-              offset: 7
+              offset: 8
               length: 0
               inner: []
             unhashed_length:
-              offset: 7
-              length: 1
+              offset: 8
+              length: 2
               inner: 0
             unhashed_subpackets:
-              offset: 8
+              offset: 10
               length: 0
               inner: []
             hash_prefix:
-              offset: 8
+              offset: 10
               length: 2
               inner:
                 - 0
                 - 1
             mpis:
-              offset: 10
-              length: 2
+              offset: 12
+              length: 5
               inner:
-                offset: 10
-                length: 2
+                offset: 12
+                length: 5
                 inner:
                   length:
-                    offset: 10
-                    length: 1
+                    offset: 12
+                    length: 2
                     inner: 17
                   integers:
-                    offset: 11
-                    length: 1
+                    offset: 14
+                    length: 3
                     inner:
                       - 1
                       - 2

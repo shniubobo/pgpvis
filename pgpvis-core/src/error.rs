@@ -45,6 +45,9 @@ pub enum Error {
     #[error("failed to parse packet")]
     Parse(#[from] PgpError),
 
+    #[error("failed to parse embedded signature")]
+    ParseEmbeddedSignature,
+
     #[error("failed to read message")]
     Read(#[from] std::io::Error),
 

@@ -121,6 +121,13 @@ impl Converter<'_> {
 
         Ok((offset, field_length))
     }
+
+    /// Insert field lengths before the next span.
+    fn insert_field_lengths(&mut self, field_lengths: &[usize]) {
+        let index = self.next_field_index;
+        self.field_lengths
+            .splice(index..index, field_lengths.iter().copied());
+    }
 }
 
 /// Records the state of parsing.
@@ -653,6 +660,15 @@ impl Convert<pgp::packet::signature::subpacket::SubpacketValue> for SignatureSub
                 hash: converter.next_span_with(digest.clone())?,
             },
             Subpkt::EmbeddedSignature(signature) => {
+                // `sequoia-openpgp` returns the embedded signature in one big
+                // field, so we have to take extra steps to get each individual
+                // field.
+                let fields = Self::embedded_signature_fields(signature)?;
+                // Discard the next field, which is the embedded signature as a
+                // whole.
+                converter.next_field_index();
+                converter.insert_field_lengths(&fields);
+
                 let signature = {
                     let signature = Signature::convert_spanned(signature, converter)?;
                     let (span, signature) = signature.take();
@@ -679,6 +695,50 @@ impl Convert<pgp::packet::signature::subpacket::SubpacketValue> for SignatureSub
             )))?,
         };
         Ok(ret)
+    }
+}
+
+impl SignatureSubpacketData {
+    fn embedded_signature_fields(signature: &pgp::packet::Signature) -> Result<Vec<usize>> {
+        let bytes = signature.to_vec()?;
+
+        let parser = Self::new_parser(&bytes);
+        let parser = pgp::packet::Signature::parse(parser)?;
+
+        let ret = parser
+            .map
+            .ok_or(Error::ParseEmbeddedSignature)?
+            .entries
+            .iter()
+            .map(|entry| entry.length)
+            .collect();
+        Ok(ret)
+    }
+
+    fn new_parser(bytes: &[u8]) -> pgp::parse::PacketHeaderParser {
+        use pgp::parse::buffered_reader::BufferedReader;
+
+        let buffered_reader =
+            pgp::parse::buffered_reader::Memory::with_cookie(bytes, pgp::parse::Cookie::default())
+                .into_boxed();
+        let settings = pgp::parse::PacketParserSettings {
+            map: true,
+            ..Default::default()
+        };
+        let state = pgp::parse::PacketParserState::new(settings);
+
+        // Almost the same as `PacketHeaderParser::new_naked`, with `state`
+        // changed.
+        pgp::parse::PacketHeaderParser::new(
+            buffered_reader,
+            state,
+            vec![0],
+            pgp::packet::Header::new(
+                pgp::packet::header::CTB::new(pgp::packet::Tag::Reserved),
+                pgp::packet::header::BodyLength::Full(0),
+            ),
+            Vec::new(),
+        )
     }
 }
 
@@ -1346,10 +1406,7 @@ impl Convert<pgp::packet::UserID> for UserId {
 mod tests {
     use std::{fmt::Display, time::Duration};
 
-    use pgp::parse::{
-        buffered_reader::{BufferedReader, Memory},
-        Cookie, PacketHeaderParser, PacketParserSettings, PacketParserState, Parse,
-    };
+    use pgp::parse::Parse;
     use serde::Serialize;
 
     use super::*;
@@ -1446,7 +1503,7 @@ mod tests {
         (@assert_map ( $( $args:expr ),* ), $parse:ty, $from:expr, $fields:literal) => {
             let bytes = $from.to_vec().unwrap();
 
-            let parser = new_parser(&bytes);
+            let parser = SignatureSubpacketData::new_parser(&bytes);
             let parser = <$parse>::parse(parser, $($args),*).unwrap();
 
             let n_fields = parser.map.unwrap().iter().count();
@@ -1458,7 +1515,7 @@ mod tests {
         (@assert_map_ref_mut ( $( $args:expr ),* ), $parse:ty, $from:expr, $fields:literal) => {
             let bytes = $from.to_vec().unwrap();
 
-            let mut parser = new_parser(&bytes);
+            let mut parser = SignatureSubpacketData::new_parser(&bytes);
             let _ = <$parse>::parse(&mut parser, $($args),*).unwrap();
 
             let n_fields = parser.map.unwrap().iter().count();
@@ -1469,7 +1526,7 @@ mod tests {
         (@assert_map__parse ( $( $args:expr ),* ), $parse:ty, $from:expr, $fields:literal) => {
             let bytes = $from.to_vec().unwrap();
 
-            let mut parser = new_parser(&bytes);
+            let mut parser = SignatureSubpacketData::new_parser(&bytes);
             let _ = <$parse>::_parse($($args,)* &mut parser).unwrap();
 
             let n_fields = parser.map.unwrap().iter().count();
@@ -1486,28 +1543,6 @@ mod tests {
 
             insta_assert!(value);
         };
-    }
-
-    fn new_parser(bytes: &[u8]) -> PacketHeaderParser {
-        let buffered_reader = Memory::with_cookie(bytes, Cookie::default()).into_boxed();
-        let settings = PacketParserSettings {
-            map: true,
-            ..Default::default()
-        };
-        let state = PacketParserState::new(settings);
-
-        // Almost the same as `PacketHeaderParser::new_naked`, with `state`
-        // changed.
-        PacketHeaderParser::new(
-            buffered_reader,
-            state,
-            vec![0],
-            pgp::packet::Header::new(
-                pgp::packet::header::CTB::new(pgp::packet::Tag::Reserved),
-                pgp::packet::header::BodyLength::Full(0),
-            ),
-            Vec::new(),
-        )
     }
 
     #[derive(Debug, Serialize)]
@@ -2104,13 +2139,15 @@ mod tests {
                     ).into()
                 ),
                 true,
-            ).unwrap() => 12 @ SignatureSubpacket
+            // `sequoia-openpgp` only provides three fields, with the whole
+            // embedded signature as one field. The fields inside the
+            // signature are inserted by us during conversion, and thus the
+            // snapshot will contain spans of non-1 lengths.
+            ).unwrap() => 3 @ SignatureSubpacket
+        } @ {
+            map_ref_mut(17, pgp::crypto::HashAlgorithm::SHA256)
+                -> pgp::packet::signature::subpacket::Subpacket
         }
-        // FIXME: Retrieve fields for the embedded signature.
-        // @ {
-        //     map_ref_mut(17, pgp::crypto::HashAlgorithm::SHA256)
-        //         -> pgp::packet::signature::subpacket::Subpacket
-        // }
 
         sig_subpkt_signature_issuer_fingerprint {
             pgp::packet::signature::subpacket::Subpacket::new(

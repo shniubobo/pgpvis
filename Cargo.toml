@@ -15,4 +15,4 @@ codegen-units = 1
 
 [patch.crates-io.sequoia-openpgp]
 git = "https://github.com/shniubobo/sequoia.git"
-rev = "e906c1c7c491b6435aade3bb356a9685ad43f8c4"
+rev = "aebe70d78b5c645aa26c21463197903418fbfb71"

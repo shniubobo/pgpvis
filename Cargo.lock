@@ -289,7 +289,7 @@ dependencies = [
 [[package]]
 name = "buffered-reader"
 version = "1.4.0"
-source = "git+https://github.com/shniubobo/sequoia.git?rev=e906c1c7c491b6435aade3bb356a9685ad43f8c4#e906c1c7c491b6435aade3bb356a9685ad43f8c4"
+source = "git+https://github.com/shniubobo/sequoia.git?rev=aebe70d78b5c645aa26c21463197903418fbfb71#aebe70d78b5c645aa26c21463197903418fbfb71"
 dependencies = [
  "libc",
 ]
@@ -2127,7 +2127,7 @@ checksum = "1bc711410fbe7399f390ca1c3b60ad0f53f80e95c5eb935e52268a0e2cd49acc"
 [[package]]
 name = "sequoia-openpgp"
 version = "2.0.0"
-source = "git+https://github.com/shniubobo/sequoia.git?rev=e906c1c7c491b6435aade3bb356a9685ad43f8c4#e906c1c7c491b6435aade3bb356a9685ad43f8c4"
+source = "git+https://github.com/shniubobo/sequoia.git?rev=aebe70d78b5c645aa26c21463197903418fbfb71#aebe70d78b5c645aa26c21463197903418fbfb71"
 dependencies = [
  "aes",
  "aes-gcm",
