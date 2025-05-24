@@ -721,9 +721,25 @@ macro_rules! gen_bitflags_convert_impls {
                     let offset = span.offset;
 
                     seq!(N in 0..$n_octets {
-                        let flags~N = BitFlags::<$to~N>::from_bits(*flags.get(N).unwrap_or(&0))
-                            .map_err(Into::<BitflagsError>::into)?;
-                        let span~N = Span::new(offset + N, 1, flags~N);
+                        let mut flags_exists_~N = true;
+                        let flags~N = {
+                            let flags = match flags.get(N) {
+                                Some(flags) => flags,
+                                None => {
+                                    flags_exists_~N = false;
+                                    &0
+                                }
+                            };
+                            BitFlags::<$to~N>::from_bits(*flags)
+                                .map_err(Into::<BitflagsError>::into)?
+                        };
+                        // We still increase the offset; that the length is zero
+                        // is already enough to express that the span is
+                        // non-existent.
+                        let span~N = match flags_exists_~N {
+                            true => Span::new(offset + N, 1, flags~N),
+                            false => Span::new(offset + N, 0, flags~N),
+                        };
                     });
 
                     seq!(N in 0..$n_octets {
@@ -1982,8 +1998,6 @@ mod tests {
                 -> pgp::packet::signature::subpacket::Subpacket
         }
 
-        // FIXME: This one's snapshot is incorrect. The second octet's span
-        // should be 0-lengthed.
         sig_subpkt_signature_key_flags_1 {
             pgp::packet::signature::subpacket::Subpacket::new(
                 pgp::packet::signature::subpacket::SubpacketValue::KeyFlags(
@@ -1994,6 +2008,19 @@ mod tests {
             ).unwrap() => 3 @ SignatureSubpacket
         } @ {
             map_ref_mut(3, pgp::crypto::HashAlgorithm::SHA256)
+                -> pgp::packet::signature::subpacket::Subpacket
+        }
+
+        sig_subpkt_signature_key_flags_2_zeroed {
+            pgp::packet::signature::subpacket::Subpacket::new(
+                pgp::packet::signature::subpacket::SubpacketValue::KeyFlags(
+                    pgp::types::KeyFlags::new([0b1011_1111, 0]),
+                ),
+                true,
+            // Provided as one span, though we have split it into several ones.
+            ).unwrap() => 3 @ SignatureSubpacket
+        } @ {
+            map_ref_mut(4, pgp::crypto::HashAlgorithm::SHA256)
                 -> pgp::packet::signature::subpacket::Subpacket
         }
 

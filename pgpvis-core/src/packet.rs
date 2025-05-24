@@ -110,8 +110,18 @@ pub struct Span<T>
 where
     T: ?Sized,
 {
+    /// Offset of the span from the first octet of the message.
+    ///
+    /// Note that this is NOT offset from the start of each packet.
     pub offset: usize,
+
+    /// Length of the span.
+    ///
+    /// A length of 0 indicates a non-existent span, in which case
+    /// [`offset`](Self::offset) and [`inner`](Self::inner) should be ignored.
     pub length: usize,
+
+    /// The actual data structure which the span represents.
     pub inner: T,
 }
 

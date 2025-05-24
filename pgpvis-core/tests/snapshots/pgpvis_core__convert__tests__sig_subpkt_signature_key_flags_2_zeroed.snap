@@ -1,6 +1,5 @@
 ---
 source: pgpvis-core/src/convert.rs
-assertion_line: 1527
 expression: value
 ---
 offset: 0
@@ -29,5 +28,5 @@ inner:
             length: 1
             inner: 191
           - offset: 3
-            length: 0
+            length: 1
             inner: 0
