@@ -289,8 +289,7 @@ dependencies = [
 [[package]]
 name = "buffered-reader"
 version = "1.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "db26bf1f092fd5e05b5ab3be2f290915aeb6f3f20c4e9f86ce0f07f336c2412f"
+source = "git+https://github.com/shniubobo/sequoia.git?rev=aebe70d78b5c645aa26c21463197903418fbfb71#aebe70d78b5c645aa26c21463197903418fbfb71"
 dependencies = [
  "libc",
 ]
@@ -797,6 +796,27 @@ name = "encode_unicode"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "34aa73646ffb006b8f5147f3dc182bd4bcb190227ce861fc4a4844bf8e3cb2c0"
+
+[[package]]
+name = "enumflags2"
+version = "0.7.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ba2f4b465f5318854c6f8dd686ede6c0a9dc67d4b1ac241cf0eb51521a309147"
+dependencies = [
+ "enumflags2_derive",
+ "serde",
+]
+
+[[package]]
+name = "enumflags2_derive"
+version = "0.7.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fc4caf64a58d7a6d65ab00639b046ff54399a39f5f2554728895ace4b297cd79"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
 
 [[package]]
 name = "env_filter"
@@ -1671,8 +1691,10 @@ version = "0.0.0"
 dependencies = [
  "chrono",
  "derive_more",
+ "enumflags2",
  "insta",
  "paste",
+ "seq-macro",
  "sequoia-openpgp",
  "serde",
  "serde_repr",
@@ -2097,10 +2119,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "56e6fa9c48d24d85fb3de5ad847117517440f6beceb7798af16b4a87d616b8d0"
 
 [[package]]
+name = "seq-macro"
+version = "0.3.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1bc711410fbe7399f390ca1c3b60ad0f53f80e95c5eb935e52268a0e2cd49acc"
+
+[[package]]
 name = "sequoia-openpgp"
 version = "2.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "015e5fc3d023418b9db98ca9a7f3e90b305872eeafe5ca45c5c32b5eb335c1e8"
+source = "git+https://github.com/shniubobo/sequoia.git?rev=aebe70d78b5c645aa26c21463197903418fbfb71#aebe70d78b5c645aa26c21463197903418fbfb71"
 dependencies = [
  "aes",
  "aes-gcm",
@@ -2147,7 +2174,7 @@ dependencies = [
  "sha1collisiondetection",
  "sha2",
  "sha3",
- "thiserror 2.0.12",
+ "thiserror 1.0.69",
  "twofish",
  "typenum",
  "x25519-dalek",

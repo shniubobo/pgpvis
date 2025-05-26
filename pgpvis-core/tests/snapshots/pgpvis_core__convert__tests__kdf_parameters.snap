@@ -8,11 +8,11 @@ inner:
   length:
     offset: 0
     length: 1
-    inner: 3
+    inner: ~
   reserved:
     offset: 1
     length: 1
-    inner: 1
+    inner: ~
   hash_id:
     offset: 2
     length: 1

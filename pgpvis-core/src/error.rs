@@ -1,21 +1,32 @@
 //! `Result`- and `Error`-related types for the crate.
 
 use std::result::Result as StdResult;
+use std::{array::TryFromSliceError, num::TryFromIntError};
 
-use sequoia_openpgp as pgp;
-use sequoia_openpgp::anyhow::Error as PgpError;
+use enumflags2::FromBitsError;
+use sequoia_openpgp::{self as pgp, anyhow::Error as PgpError};
 
-use crate::packet::{PublicKeyAlgorithmId, Span};
+use crate::packet::*;
 
 pub type Result<T> = StdResult<T, Error>;
 
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum Error {
+    #[error("invalid bitflags: {}", .0)]
+    InvalidBitflags(#[from] BitflagsError),
+
+    #[error("invalid key ID")]
+    InvalidKeyId,
+
     // This should never be created, as long as `sequoia_openpgp` is
     // functioning correctly.
     #[error("{bits} bits cannot be represented with two octets")]
     MpiLengthOverflow { bits: usize },
+
+    // TODO: Replace the other overflow variants with this.
+    #[error("an overflow occurred during int conversion")]
+    Overflow(#[from] TryFromIntError),
 
     /// An error has been returned from [`sequoia_openpgp`].
     ///
@@ -34,6 +45,9 @@ pub enum Error {
     #[error("failed to parse packet")]
     Parse(#[from] PgpError),
 
+    #[error("failed to parse embedded signature")]
+    ParseEmbeddedSignature,
+
     #[error("failed to read message")]
     Read(#[from] std::io::Error),
 
@@ -42,6 +56,9 @@ pub enum Error {
     // panicking.
     #[error("span {field} not found")]
     SpanNotFound { field: usize },
+
+    #[error("a subpacket area length cannot be {length}, which exceeds two octets")]
+    SubpacketAreaLengthOverflow { length: usize },
 
     // This should never be created, as long as `sequoia_openpgp` is
     // functioning correctly.
@@ -59,6 +76,15 @@ pub enum Error {
     #[error("unimplemented packet at span {span}; type id: {type_id}")]
     UnimplementedPacket { type_id: u8, span: Span<()> },
 
+    #[error("wrong length of bitflags")]
+    WrongBitflagsLength(#[from] TryFromSliceError),
+
+    #[error("wrong length of a version {version} fingerprint: {length}")]
+    WrongFingerprintLength { version: u8, length: usize },
+
+    #[error("expected fingerprint version {expected}, got {got}")]
+    WrongFingerprintVersion { expected: u8, got: u8 },
+
     // The plan is that we allow conversion between the two formats in the
     // future, and this `Error` is returned in case a `CTB` of the wrong format
     // has been passed in. This won't be useful if we decide not to implement
@@ -73,4 +99,33 @@ pub enum Error {
         expected: PublicKeyAlgorithmId,
         got: pgp::types::PublicKeyAlgorithm,
     },
+
+    // It is impossible to have a trait object of `SignatureMpis` here, as its
+    // supertrait `Serialize` is not dyn-compatible. It is also impossible to
+    // convert from `pgp::crypto::mpi::Signature` into a `Display` string, and
+    // a `Debug` string needs to be instead constructed beforehand.
+    #[error("expected mpis {expected}, got {got}")]
+    WrongSignatureMpis { expected: &'static str, got: String },
+
+    #[error("wrong first octet of {length}-octet signature subpacket length: {first}")]
+    WrongSignatureSubpacketLengthEncoding { length: u8, first: u8 },
+}
+
+#[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
+pub enum BitflagsError {
+    #[error("failed to convert to notation data bitflags")]
+    NotationData(#[from] FromBitsError<NotationDataFlag>),
+
+    #[error("failed to convert to key server preferences bitflags octet 0")]
+    KeyServerPreferences0(#[from] FromBitsError<KeyServerPreferencesFlags0>),
+
+    #[error("failed to convert to key flags bitflags octet 0")]
+    KeyFlags0(#[from] FromBitsError<KeyFlagsFlags0>),
+
+    #[error("failed to convert to key flags bitflags octet 1")]
+    KeyFlags1(#[from] FromBitsError<KeyFlagsFlags1>),
+
+    #[error("failed to convert to features bitflags octet 0")]
+    Features0(#[from] FromBitsError<FeaturesFlags0>),
 }

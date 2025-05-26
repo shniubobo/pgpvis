@@ -149,6 +149,7 @@ impl Render for Span<AnyPacket> {
 
         match &self.inner {
             AnyPacket::Reserved(packet) => render_packet!(node, packet),
+            AnyPacket::Signature(_packet) => (),
             AnyPacket::PublicKey(packet) => render_packet!(node, packet),
             AnyPacket::UserId(packet) => render_packet!(node, packet),
             AnyPacket::PublicSubkey(packet) => render_packet!(node, packet),
@@ -417,7 +418,7 @@ impl RenderRootlessly for Ed25519 {
     }
 }
 
-impl RenderRootlessly for UnimplementedPublicKeyAlgorithm {
+impl RenderRootlessly for PublicKeyAlgorithmUnimplemented {
     // *No root node*
     //   Unimplemented
     fn render_rootlessly(&self) -> RootlessNode {
@@ -905,7 +906,7 @@ mod tests {
 
     #[test]
     fn unimplemented_public_key_algorithm() {
-        let node = UnimplementedPublicKeyAlgorithm.render_rootlessly();
+        let node = PublicKeyAlgorithmUnimplemented.render_rootlessly();
         insta_assert!(node);
     }
 
