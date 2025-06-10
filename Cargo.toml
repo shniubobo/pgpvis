@@ -12,3 +12,7 @@ lto = true
 panic = "abort"
 incremental = false
 codegen-units = 1
+
+[patch.crates-io.sequoia-openpgp]
+git = "https://github.com/shniubobo/sequoia.git"
+rev = "aebe70d78b5c645aa26c21463197903418fbfb71"

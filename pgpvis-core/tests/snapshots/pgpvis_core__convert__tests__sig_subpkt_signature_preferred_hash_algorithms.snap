@@ -1,0 +1,36 @@
+---
+source: pgpvis-core/src/convert.rs
+assertion_line: 1508
+expression: value
+---
+offset: 0
+length: 3
+inner:
+  length:
+    offset: 0
+    length: 1
+    inner:
+      One: 0
+  type_id:
+    offset: 1
+    length: 1
+    inner:
+      critical: true
+      type_id: ~
+  data:
+    offset: 2
+    length: 1
+    inner:
+      PreferredHashAlgorithms:
+        offset: 2
+        length: 1
+        inner:
+          - offset: 2
+            length: 1
+            inner: Sha2_512
+          - offset: 3
+            length: 1
+            inner: Sha2_384
+          - offset: 4
+            length: 1
+            inner: Sha2_256
