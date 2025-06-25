@@ -1,0 +1,51 @@
+---
+source: pgpvis-core/src/convert.rs
+expression: value
+---
+offset: 0
+length: 7
+inner:
+  length:
+    offset: 0
+    length: 1
+    inner:
+      One: 0
+  type_id:
+    offset: 1
+    length: 1
+    inner:
+      critical: true
+      type_id: ~
+  data:
+    offset: 2
+    length: 5
+    inner:
+      NotationData:
+        flags:
+          offset: 2
+          length: 1
+          inner: 2147483648
+        name_length:
+          offset: 3
+          length: 1
+          inner: 15
+        value_length:
+          offset: 4
+          length: 1
+          inner: 8
+        name:
+          offset: 5
+          length: 1
+          inner: foo@example.com
+        value:
+          offset: 6
+          length: 1
+          inner:
+            - 68
+            - 69
+            - 65
+            - 68
+            - 66
+            - 69
+            - 69
+            - 70

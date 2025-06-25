@@ -50,11 +50,11 @@ inner:
       length:
         offset: 4
         length: 1
-        inner: 3
+        inner: ~
       reserved:
         offset: 5
         length: 1
-        inner: 1
+        inner: ~
       hash_id:
         offset: 6
         length: 1

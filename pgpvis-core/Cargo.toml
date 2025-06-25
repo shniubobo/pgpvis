@@ -8,8 +8,10 @@ crate-type = ["cdylib"]
 
 [dependencies]
 chrono = { version = "0.4.41", default-features = false, features = ["std"] }
-derive_more = { version = "2.0.1", features = ["display"] }
+derive_more = { version = "2.0.1", features = ["display", "from", "try_from"] }
+enumflags2 = { version = "0.7.11", features = ["serde", "std"] }
 paste = "1.0.15"
+seq-macro = "0.3.6"
 sequoia-openpgp = { version = "2.0.0", default-features = false, features = ["crypto-rust", "allow-experimental-crypto", "allow-variable-time-crypto"] }
 serde = { version = "1.0.219", features = ["derive"] }
 serde_repr = "0.1.20"

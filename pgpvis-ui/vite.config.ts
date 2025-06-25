@@ -16,6 +16,7 @@ export default defineConfig({
       verbose: process.env.CI === "true",
       extraArgs: {
         wasmBindgen: ["--remove-producers-section"],
+        wasmOpt: ["-O", "--enable-bulk-memory-opt"],
       },
       optimize: {
         // We are already specifying optimization options via `Cargo.toml`.

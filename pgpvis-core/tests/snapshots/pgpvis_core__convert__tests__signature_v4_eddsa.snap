@@ -1,0 +1,102 @@
+---
+source: pgpvis-core/src/convert.rs
+expression: value
+---
+offset: 0
+length: 15
+inner:
+  Version4EdDsaLegacy:
+    version:
+      offset: 0
+      length: 1
+      inner: ~
+    type_id:
+      offset: 1
+      length: 1
+      inner: Text
+    pub_key_algo_id:
+      offset: 2
+      length: 1
+      inner: ~
+    hash_algo_id:
+      offset: 3
+      length: 1
+      inner: Sha2_256
+    hashed_length:
+      offset: 4
+      length: 1
+      inner: 3
+    hashed_subpackets:
+      offset: 5
+      length: 3
+      inner:
+        - offset: 5
+          length: 3
+          inner:
+            length:
+              offset: 5
+              length: 1
+              inner:
+                One: 0
+            type_id:
+              offset: 6
+              length: 1
+              inner:
+                critical: true
+                type_id: ~
+            data:
+              offset: 7
+              length: 1
+              inner:
+                Revocable:
+                  offset: 7
+                  length: 1
+                  inner: false
+    unhashed_length:
+      offset: 8
+      length: 1
+      inner: 0
+    unhashed_subpackets:
+      offset: 9
+      length: 0
+      inner: []
+    hash_prefix:
+      offset: 9
+      length: 2
+      inner:
+        - 0
+        - 1
+    mpis:
+      offset: 11
+      length: 4
+      inner:
+        r:
+          offset: 11
+          length: 2
+          inner:
+            length:
+              offset: 11
+              length: 1
+              inner: 17
+            integers:
+              offset: 12
+              length: 1
+              inner:
+                - 1
+                - 2
+                - 3
+        s:
+          offset: 13
+          length: 2
+          inner:
+            length:
+              offset: 13
+              length: 1
+              inner: 19
+            integers:
+              offset: 14
+              length: 1
+              inner:
+                - 4
+                - 5
+                - 6

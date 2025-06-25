@@ -11,15 +11,18 @@
 //! has been dropped during `pgpvis` v0.2, the latter has become the sole
 //! reason for these [`Serialize`]s to linger on the heads of so many types.
 //!
-//! Some types in this module implement [`Display`] to generate each packet's
-//! summary line.
+//! Some types in this module implement [`Display`] to help
+//! [`render`](crate::render)ing.
 
 use std::marker::PhantomData;
 use std::result::Result as StdResult;
 
-use derive_more::with_trait::Display;
+use derive_more::with_trait::{Display, From, TryFrom};
+use enumflags2::{bitflags, BitFlags};
 use serde::{Serialize, Serializer};
 use serde_repr::Serialize_repr;
+
+use crate::error::*;
 
 /// Newtype for [`Vec<Span<AnyPacket>>`].
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
@@ -93,6 +96,7 @@ macro_rules! gen_packet_enums_and_impls {
 
 gen_packet_enums_and_impls! {
     Reserved = 0,
+    Signature = 2,
     PublicKey = 6,
     UserId = 13,
     PublicSubkey = 14,
@@ -102,9 +106,22 @@ gen_packet_enums_and_impls! {
 /// Information of where a [`Packet`], [`Header`], [`Body`], etc., or a header
 /// or body field, is located inside an OpenPGP message.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
-pub struct Span<T> {
+pub struct Span<T>
+where
+    T: ?Sized,
+{
+    /// Offset of the span from the first octet of the message.
+    ///
+    /// Note that this is NOT offset from the start of each packet.
     pub offset: usize,
+
+    /// Length of the span.
+    ///
+    /// A length of 0 indicates a non-existent span, in which case
+    /// [`offset`](Self::offset) and [`inner`](Self::inner) should be ignored.
     pub length: usize,
+
+    /// The actual data structure which the span represents.
     pub inner: T,
 }
 
@@ -128,12 +145,12 @@ impl<T> Span<T> {
 
     /// Take the inner value, returning a new [`Span`] without an inner
     /// value, and the old inner.
-    fn take(self) -> (Span<()>, T) {
+    pub fn take(self) -> (Span<()>, T) {
         (self.replace_with(()), self.inner)
     }
 
     /// Return a new [`Span`] with a new [`inner`](Self::inner) field.
-    fn replace_with<U>(&self, new_inner: U) -> Span<U> {
+    pub fn replace_with<U>(&self, new_inner: U) -> Span<U> {
         Span {
             offset: self.offset,
             length: self.length,
@@ -281,10 +298,528 @@ where
     }
 }
 
+#[derive(Clone, Debug, Display, PartialEq, Eq, Serialize, From)]
+#[non_exhaustive]
+pub enum Signature {
+    Version4RsaEncryptSign(SignatureVersion4<RsaEncryptSign>),
+    Version4EdDsaLegacy(SignatureVersion4<EdDsaLegacy>),
+    Version4Ed25519(SignatureVersion4<Ed25519>),
+    Version4Unimplemented(SignatureVersion4<PublicKeyAlgorithmUnimplemented>),
+}
+
+#[derive(Clone, Debug, Display, PartialEq, Eq, Serialize)]
+#[display(
+    "[{}][{:02}] {}",
+    Signature::TYPE_ID,
+    type_id.inner as u8,
+    type_id.inner,
+)]
+pub struct SignatureVersion4<A>
+where
+    A: PublicKeyAlgorithm,
+{
+    pub version: Span<PhantomData<u8>>,
+    pub type_id: Span<SignatureTypeId>,
+    pub pub_key_algo_id: Span<PhantomData<A>>,
+    pub hash_algo_id: Span<HashAlgorithmId>,
+    pub hashed_length: Span<u16>,
+    pub hashed_subpackets: Span<SignatureSubpackets>,
+    pub unhashed_length: Span<u16>,
+    pub unhashed_subpackets: Span<SignatureSubpackets>,
+    pub hash_prefix: Span<[u8; 2]>,
+    pub mpis: Span<A::SignatureMpis>,
+}
+
+#[derive(Clone, Copy, Debug, Display, PartialEq, Eq, Serialize, TryFrom)]
+#[try_from(repr)]
+#[repr(u8)]
+#[non_exhaustive]
+pub enum SignatureTypeId {
+    #[display("Binary Signature")]
+    Binary = 0x00,
+
+    #[display("Text Signature")]
+    Text = 0x01,
+
+    #[display("Standalone Signature")]
+    Standalone = 0x02,
+
+    #[display("Generic Certification Signature")]
+    GenericCertification = 0x10,
+
+    #[display("Persona Certification Signature")]
+    PersonaCertification = 0x11,
+
+    #[display("Casual Certification Signature")]
+    CasualCertification = 0x12,
+
+    #[display("Positive Certification Signature")]
+    PositiveCertification = 0x13,
+
+    #[display("Subkey Binding Signature")]
+    SubkeyBinding = 0x18,
+
+    #[display("Primary Key Binding Signature")]
+    PrimaryKeyBinding = 0x19,
+
+    #[display("Direct Key Signature")]
+    DirectKey = 0x1F,
+
+    #[display("Key Revocation Signature")]
+    KeyRevocation = 0x20,
+
+    #[display("Subkey Revocation Signature")]
+    SubkeyRevocation = 0x28,
+
+    #[display("Certification Revocation Signature")]
+    CertificationRevocation = 0x30,
+
+    #[display("Timestamp Signature")]
+    Timestamp = 0x40,
+
+    #[display("Third-Party Confirmation Signature")]
+    ThirdPartyConfirmation = 0x50,
+
+    Reserved = 0xFF,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, From)]
+pub struct SignatureSubpackets(pub Vec<Span<SignatureSubpacket>>);
+
+#[derive(Clone, Debug, Display, PartialEq, Eq, Serialize)]
+#[display("[{}] {}", data.inner.type_id(), data.inner)]
+pub struct SignatureSubpacket {
+    pub length: Span<SignatureSubpacketLength>,
+    pub type_id: Span<SignatureSubpacketTypeIdOctet>,
+    pub data: Span<SignatureSubpacketData>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+pub enum SignatureSubpacketLength {
+    One(u8),
+    Two(u8, u8),
+    Five(u8, u32),
+}
+
+impl SignatureSubpacketLength {
+    pub const TWO_MASK: u8 = 192;
+    pub const FIVE_MASK: u8 = 255;
+
+    pub const fn n_octets(&self) -> u8 {
+        match self {
+            SignatureSubpacketLength::One(..) => 1,
+            SignatureSubpacketLength::Two(..) => 2,
+            SignatureSubpacketLength::Five(..) => 5,
+        }
+    }
+
+    pub const fn first(&self) -> u8 {
+        match self {
+            Self::One(first) | Self::Two(first, _) | Self::Five(first, _) => *first,
+        }
+    }
+
+    pub const fn is_valid(&self) -> bool {
+        match self {
+            SignatureSubpacketLength::One(octet) => Self::is_one(*octet),
+            SignatureSubpacketLength::Two(first, _) => Self::is_two(*first),
+            SignatureSubpacketLength::Five(first, _) => Self::is_five(*first),
+        }
+    }
+
+    pub const fn is_one(first: u8) -> bool {
+        first < Self::TWO_MASK
+    }
+
+    pub const fn is_two(first: u8) -> bool {
+        Self::TWO_MASK <= first && first < Self::FIVE_MASK
+    }
+
+    pub const fn is_five(first: u8) -> bool {
+        first == Self::FIVE_MASK
+    }
+}
+
+impl TryFrom<SignatureSubpacketLength> for u32 {
+    type Error = Error;
+
+    fn try_from(length: SignatureSubpacketLength) -> Result<Self> {
+        use SignatureSubpacketLength as Length;
+
+        if !length.is_valid() {
+            return Err(Error::WrongSignatureSubpacketLengthEncoding {
+                length: length.n_octets(),
+                first: length.first(),
+            });
+        }
+
+        Ok(match length {
+            Length::One(octet) => octet as _,
+            Length::Two(first, second) => {
+                const MASK: u32 = Length::TWO_MASK as _;
+                ((first as u32 - MASK) << 8) + second as u32 + MASK
+            }
+            Length::Five(_, rest) => rest,
+        })
+    }
+}
+
+// TODO:
+//
+// 1. Rename `SignatureSubpacketData` to `AnySignatureSubpacketData`;
+// 2. Generate a newtype struct for each of its variants, make them implement
+//    `trait SignatureSubpacketData`, which has a constant `TYPE_ID`;
+// 3. Give this type a generic parameter `S: SignatureSubpacketData`, and put
+//    that into the `PhantomData`.
+//
+// These are to make it possible to calculate the actual byte without passing
+// in a `SignatureSubpacketData`. The second step would require a proc macro.
+// `newtype-enum` exists for this purpose, but it is unmaintained, with lots of
+// features missing, so we would need to fork it to make necessary amendments.
+//
+// Given that there is little need to convert this type back to a byte, this
+// may be unnecessary complexity. However, this has been a common pattern
+// within the crate, so the benefits provided by such a proc macro could be
+// greater than the efforts needed.
+//
+// [Refinement / pattern types] would also fit in this use case, but it is
+// still at an early stage, only aims for integer range patterns, and will not
+// enter stable in the near future.
+//
+// [Refinement / pattern types]:
+//     https://github.com/rust-lang/rust/issues/123646
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+pub struct SignatureSubpacketTypeIdOctet {
+    pub critical: bool,
+    pub type_id: PhantomData<u8>,
+}
+
+#[derive(Clone, Debug, Display, PartialEq, Eq, Serialize)]
+#[non_exhaustive]
+pub enum SignatureSubpacketData {
+    #[display("Signature Creation Time")]
+    SignatureCreationTime(Span<Time>),
+
+    #[display("Signature Expiration Time")]
+    SignatureExpirationTime(Span<Time>),
+
+    #[display("Exportable Certification")]
+    ExportableCertification(Span<bool>),
+
+    #[display("Trust Signature")]
+    TrustSignature { level: Span<u8>, amount: Span<u8> },
+
+    #[display("Regular Expression")]
+    RegularExpression(Span<String>),
+
+    #[display("Revocable")]
+    Revocable(Span<bool>),
+
+    #[display("Key Expiration Time")]
+    KeyExpirationTime(Span<Time>),
+
+    #[display("Preferred Symmetric Ciphers for v1 SEIPD")]
+    PreferredSymmetricCiphers(Span<Vec<Span<SymmetricKeyAlgorithmId>>>),
+
+    #[display("Revocation Key (deprecated)")]
+    RevocationKey {
+        class: Span<u8>,
+        pub_key_algo_id: Span<PublicKeyAlgorithmId>,
+        fingerprint: Span<FingerprintVersion4>,
+    },
+
+    #[display("Issuer Key ID")]
+    IssuerKeyId(Span<KeyId>),
+
+    #[display("Notation Data")]
+    NotationData {
+        flags: Span<BitFlags<NotationDataFlag>>,
+        name_length: Span<u16>,
+        value_length: Span<u16>,
+        name: Span<String>,
+        value: Span<Vec<u8>>,
+    },
+
+    #[display("Preferred Hash Algorithms")]
+    PreferredHashAlgorithms(Span<Vec<Span<HashAlgorithmId>>>),
+
+    #[display("Preferred Compression Algorithms")]
+    PreferredCompressionAlgorithms(Span<Vec<Span<CompressionAlgorithmId>>>),
+
+    #[display("Key Server Preferences")]
+    KeyServerPreferences(Span<KeyServerPreferencesFlags>),
+
+    #[display("Preferred Key Server")]
+    PreferredKeyServer(Span<String>),
+
+    #[display("Primary User ID")]
+    PrimaryUserId(Span<bool>),
+
+    #[display("Policy URI")]
+    PolicyUri(Span<String>),
+
+    #[display("Key Flags")]
+    KeyFlags(Span<KeyFlagsFlags>),
+
+    #[display("Signer's User ID")]
+    SignerUserId(Span<String>),
+
+    #[display("Reason for Revocation")]
+    RevocationReason {
+        code: Span<RevocationCode>,
+        reason: Span<String>,
+    },
+
+    #[display("Features")]
+    Features(Span<FeaturesFlags>),
+
+    #[display("Signature Target")]
+    SignatureTarget {
+        pub_key_algo_id: Span<PublicKeyAlgorithmId>,
+        hash_algo_id: Span<HashAlgorithmId>,
+        hash: Span<Vec<u8>>,
+    },
+
+    #[display("Embedded Signature")]
+    // Using `Box` to reduce variant size.
+    EmbeddedSignature(Span<Box<Signature>>),
+
+    #[display("Issuer Fingerprint")]
+    IssuerFingerprint {
+        version: Span<PhantomData<u8>>,
+        fingerprint: Span<Fingerprint>,
+    },
+
+    #[display("Intended Recipient Fingerprint")]
+    IntendedRecipientFingerprint {
+        version: Span<PhantomData<u8>>,
+        fingerprint: Span<Fingerprint>,
+    },
+
+    #[display("Preferred AEAD Ciphersuites")]
+    PreferredAeadCiphersuites(Span<Vec<Span<AeadCiphersuite>>>),
+}
+
+macro_rules! gen_subpacket_type_ids {
+    { $( $name:ident $member:tt = $id:literal ),* $(,)? } => {
+        impl SignatureSubpacketData {
+            pub const fn type_id(&self) -> u8 {
+                match self {
+                    $( Self::$name $member => $id, )*
+                }
+            }
+        }
+
+        #[derive(Copy, Clone, Debug, Display, PartialEq, Eq, Serialize, TryFrom)]
+        #[try_from(repr)]
+        #[repr(u8)]
+        #[non_exhaustive]
+        pub enum SignatureSubpacketTypeId {
+            $( $name = $id, )*
+        }
+    };
+}
+
+gen_subpacket_type_ids! {
+    SignatureCreationTime(_) = 2,
+    SignatureExpirationTime(_) = 3,
+    ExportableCertification(_) = 4,
+    TrustSignature { .. } = 5,
+    RegularExpression(_) = 6,
+    Revocable(_) = 7,
+    KeyExpirationTime(_) = 9,
+    PreferredSymmetricCiphers(_) = 11,
+    RevocationKey { .. } = 12,
+    IssuerKeyId(_) = 16,
+    NotationData { .. } = 20,
+    PreferredHashAlgorithms(_) = 21,
+    PreferredCompressionAlgorithms(_) = 22,
+    KeyServerPreferences(_) = 23,
+    PreferredKeyServer(_) = 24,
+    PrimaryUserId(_) = 25,
+    PolicyUri(_) = 26,
+    KeyFlags(_) = 27,
+    SignerUserId(_) = 28,
+    RevocationReason { .. } = 29,
+    Features(_) = 30,
+    SignatureTarget { .. } = 31,
+    EmbeddedSignature(_) = 32,
+    IssuerFingerprint { .. } = 33,
+    IntendedRecipientFingerprint { .. } = 35,
+    PreferredAeadCiphersuites(_) = 39,
+}
+
+#[derive(Clone, Copy, Debug, Display, PartialEq, Eq, Serialize)]
+#[bitflags]
+#[repr(u32)]
+pub enum NotationDataFlag {
+    #[display("Notation value is UTF-8 text")]
+    HumanReadable = 0x8000_0000,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+pub struct KeyServerPreferencesFlags(pub Span<BitFlags<KeyServerPreferencesFlags0>>);
+
+#[derive(Clone, Copy, Debug, Display, PartialEq, Eq, Serialize)]
+#[bitflags]
+#[repr(u8)]
+pub enum KeyServerPreferencesFlags0 {
+    #[display(
+        "The keyholder requests that this key only be modified or updated by \
+        the keyholder or an administrator of the key server."
+    )]
+    NoModify = 0x80,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+pub struct KeyFlagsFlags(
+    pub Span<BitFlags<KeyFlagsFlags0>>,
+    pub Span<BitFlags<KeyFlagsFlags1>>,
+);
+
+#[derive(Clone, Copy, Debug, Display, PartialEq, Eq, Serialize)]
+#[bitflags]
+#[repr(u8)]
+pub enum KeyFlagsFlags0 {
+    #[display(
+        "This key may be used to make User ID certifications or Direct Key \
+        signatures over other keys."
+    )]
+    Certify = 0x01,
+
+    #[display("This key may be used to sign data.")]
+    Sign = 0x02,
+
+    #[display("This key may be used to encrypt communications.")]
+    EncryptCommunication = 0x04,
+
+    #[display("This key may be used to encrypt storage.")]
+    EncryptStorage = 0x08,
+
+    #[display(
+        "The private component of this key may have been split by a \
+        secret-sharing mechanism."
+    )]
+    PrivateSplit = 0x10,
+
+    #[display("This key may be used for authentication.")]
+    Authenticate = 0x20,
+
+    #[display(
+        "The private component of this key may be in the possession of more \
+        than one person."
+    )]
+    PrivateShared = 0x80,
+}
+
+#[derive(Clone, Copy, Debug, Display, PartialEq, Eq, Serialize)]
+#[bitflags]
+#[repr(u8)]
+pub enum KeyFlagsFlags1 {
+    #[display("Reserved (ADSK)")]
+    Reserved04 = 0x04,
+
+    #[display("Reserved (timestamping)")]
+    Reserved08 = 0x08,
+}
+
+#[derive(Clone, Copy, Debug, Display, PartialEq, Eq, Serialize, TryFrom)]
+#[try_from(repr)]
+#[repr(u8)]
+#[non_exhaustive]
+pub enum RevocationCode {
+    #[display("No reason specified")]
+    NoReason = 0,
+
+    #[display("Key is superseded")]
+    Superseded = 1,
+
+    #[display("Key material has been compromised")]
+    Compromised = 2,
+
+    #[display("Key is retired and no longer used")]
+    Retired = 3,
+
+    #[display("User ID information is no longer valid")]
+    UserIdInvalid = 32,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+pub struct FeaturesFlags(pub Span<BitFlags<FeaturesFlags0>>);
+
+#[derive(Clone, Copy, Debug, Display, PartialEq, Eq, Serialize)]
+#[bitflags]
+#[repr(u8)]
+pub enum FeaturesFlags0 {
+    #[display("Version 1 SEIPD packet")]
+    SeipdVersion1 = 0x01,
+
+    #[display("Reserved")]
+    Reserved02 = 0x02,
+
+    #[display("Reserved")]
+    Reserved04 = 0x04,
+
+    #[display("Version 2 SEIPD packet")]
+    SeipdVersion2 = 0x08,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, From)]
+pub struct AeadCiphersuite(pub Span<SymmetricKeyAlgorithmId>, pub Span<AeadAlgorithmId>);
+
+pub trait SignatureMpis: Serialize {
+    const DISPLAY: &'static str;
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct SignatureMpisRsa(pub Span<Mpi>);
+impl SignatureMpis for SignatureMpisRsa {
+    const DISPLAY: &'static str = "Algorithm-specific fields for RSA signatures";
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct SignatureMpisRS {
+    pub r: Span<Mpi>,
+    pub s: Span<Mpi>,
+}
+impl SignatureMpis for SignatureMpisRS {
+    const DISPLAY: &'static str =
+        "Algorithm-specific fields for DSA, ECDSA or EdDSALegacy (Ed25519Legacy) signatures";
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct SignatureMpisEd25519(
+    #[serde(serialize_with = "<Span<[_]>>::serialize")] pub Span<[u8; 64]>,
+);
+impl SignatureMpis for SignatureMpisEd25519 {
+    const DISPLAY: &'static str = "Algorithm-specific fields for Ed25519 signatures";
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct SignatureMpisEd448(
+    #[serde(serialize_with = "<Span<[_]>>::serialize")] pub Span<[u8; 114]>,
+);
+impl SignatureMpis for SignatureMpisEd448 {
+    const DISPLAY: &'static str = "Algorithm-specific fields for Ed448 signatures";
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct SignatureMpisUnimplemented;
+impl SignatureMpis for SignatureMpisUnimplemented {
+    const DISPLAY: &'static str =
+        "Algorithm-specific fields for signatures of unimplemented algorithms";
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub enum SignatureMpisNever {}
+impl SignatureMpis for SignatureMpisNever {
+    const DISPLAY: &'static str =
+        "Non-existent algorithm-specific signature fields for algorithms uncapable to sign";
+}
+
 /// Enum for every kind of public keys, each variant being a combination of
 /// a certain version and algorithm.
 #[derive(Clone, Debug, Display, PartialEq, Eq, Serialize)]
-#[display("{}", _0)]
 #[serde(untagged)]
 #[non_exhaustive]
 pub enum PublicKey {
@@ -293,13 +828,12 @@ pub enum PublicKey {
     Version4EdDsaLegacy(PublicVersion4<Key, EdDsaLegacy>),
     Version4X25519(PublicVersion4<Key, X25519>),
     Version4Ed25519(PublicVersion4<Key, Ed25519>),
-    Version4Unimplemented(PublicVersion4<Key, UnimplementedPublicKeyAlgorithm>),
+    Version4Unimplemented(PublicVersion4<Key, PublicKeyAlgorithmUnimplemented>),
 }
 
 /// Enum for every kind of public subkeys, each variant being a combination of
 /// a certain version and algorithm.
 #[derive(Clone, Debug, Display, PartialEq, Eq, Serialize)]
-#[display("{}", _0)]
 #[serde(untagged)]
 #[non_exhaustive]
 pub enum PublicSubkey {
@@ -308,7 +842,7 @@ pub enum PublicSubkey {
     Version4EdDsaLegacy(PublicVersion4<Subkey, EdDsaLegacy>),
     Version4X25519(PublicVersion4<Subkey, X25519>),
     Version4Ed25519(PublicVersion4<Subkey, Ed25519>),
-    Version4Unimplemented(PublicVersion4<Subkey, UnimplementedPublicKeyAlgorithm>),
+    Version4Unimplemented(PublicVersion4<Subkey, PublicKeyAlgorithmUnimplemented>),
 }
 
 /// The public part of a version 4 key or subkey.
@@ -423,17 +957,19 @@ impl KeyRole for Subkey {
 /// Trait implemented by every public key algorithm struct.
 pub trait PublicKeyAlgorithm: Display {
     const ID: PublicKeyAlgorithmId;
+    type SignatureMpis: SignatureMpis;
 }
 
 macro_rules! gen_public_key_algorithm_impls {
-    ( $algorithm:ident ) => {
+    ( $algorithm:ident, $mpis:ident ) => {
         impl PublicKeyAlgorithm for $algorithm {
             const ID: PublicKeyAlgorithmId = PublicKeyAlgorithmId::$algorithm;
+            type SignatureMpis = $mpis;
         }
     };
 
-    [ $( $algorithm:ident ),+ $(,)? ] => {
-        $( gen_public_key_algorithm_impls!($algorithm); )+
+    [ $( $algorithm:ident, $mpis:ident ),+ $(,)? ] => {
+        $( gen_public_key_algorithm_impls!($algorithm, $mpis); )+
     };
 }
 
@@ -442,7 +978,8 @@ macro_rules! gen_public_key_algorithm_id_enum {
         /// Every possible ID of public key algorithms as defined by [RFC 9580].
         ///
         /// [RFC 9580]: https://datatracker.ietf.org/doc/html/rfc9580#section-9.1
-        #[derive(Clone, Copy, Debug, Display, PartialEq, Eq, Serialize_repr)]
+        #[derive(Clone, Copy, Debug, Display, PartialEq, Eq, Serialize_repr, TryFrom)]
+        #[try_from(repr)]
         #[repr(u8)]
         #[non_exhaustive]
         pub enum PublicKeyAlgorithmId {
@@ -452,8 +989,8 @@ macro_rules! gen_public_key_algorithm_id_enum {
 }
 
 macro_rules! gen_public_key_algorithm_enums_and_impls {
-    { $( $algorithm:ident = $algorithm_id:literal ),+ $(,)? } => {
-        gen_public_key_algorithm_impls![$( $algorithm ),+];
+    { $( $algorithm:ident @ $mpis:ident = $algorithm_id:literal ),+ $(,)? } => {
+        gen_public_key_algorithm_impls![$( $algorithm, $mpis ),+];
 
         gen_public_key_algorithm_id_enum! {
             $( $algorithm = $algorithm_id ),+
@@ -462,12 +999,12 @@ macro_rules! gen_public_key_algorithm_enums_and_impls {
 }
 
 gen_public_key_algorithm_enums_and_impls! {
-    RsaEncryptSign = 1,
-    Ecdh = 18,
-    EdDsaLegacy = 22,
-    X25519 = 25,
-    Ed25519 = 27,
-    UnimplementedPublicKeyAlgorithm = 100,
+    RsaEncryptSign @ SignatureMpisRsa = 1,
+    Ecdh @ SignatureMpisNever = 18,
+    EdDsaLegacy @ SignatureMpisRS = 22,
+    X25519 @ SignatureMpisNever = 25,
+    Ed25519 @ SignatureMpisEd25519 = 27,
+    PublicKeyAlgorithmUnimplemented @ SignatureMpisUnimplemented = 100,
 }
 
 #[derive(Clone, Debug, Display, PartialEq, Eq, Serialize)]
@@ -516,7 +1053,7 @@ pub struct Ed25519(pub Span<[u8; 32]>);
 
 #[derive(Clone, Copy, Debug, Display, PartialEq, Eq, Serialize)]
 #[display("Unimplemented")]
-pub struct UnimplementedPublicKeyAlgorithm;
+pub struct PublicKeyAlgorithmUnimplemented;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct Mpi {
@@ -538,6 +1075,64 @@ impl Time {
     pub fn new(secs_since_epoch: u32) -> Self {
         Self(secs_since_epoch)
     }
+}
+
+#[derive(Clone, Copy, Debug, Display, PartialEq, Eq, Serialize)]
+#[non_exhaustive]
+pub enum Fingerprint {
+    Version3(FingerprintVersion3),
+    Version4(FingerprintVersion4),
+    Version6(FingerprintVersion6),
+}
+
+impl Fingerprint {
+    pub const VERSION_3_LEN: usize = 16;
+    pub const VERSION_4_LEN: usize = 20;
+    pub const VERSION_6_LEN: usize = 32;
+}
+
+impl Fingerprint {
+    pub const fn version(&self) -> u8 {
+        match self {
+            Self::Version3(_) => 3,
+            Self::Version4(_) => 4,
+            Self::Version6(_) => 6,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+pub struct FingerprintVersion3(pub [u8; Fingerprint::VERSION_3_LEN]);
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+pub struct FingerprintVersion4(pub [u8; Fingerprint::VERSION_4_LEN]);
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+pub struct FingerprintVersion6(pub [u8; Fingerprint::VERSION_6_LEN]);
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+pub struct KeyId(pub [u8; 8]);
+
+macro_rules! gen_octets_display {
+    { $( $octets:ty ),* $(,)? } => {
+        $(
+            impl Display for $octets {
+                fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                    for octet in self.0 {
+                        write!(f, "{:02X}", octet)?;
+                    }
+                    Ok(())
+                }
+            }
+        )*
+    };
+}
+
+gen_octets_display! {
+    FingerprintVersion3,
+    FingerprintVersion4,
+    FingerprintVersion6,
+    KeyId,
 }
 
 /// A representation of curve OID containing both its length and the actual OID.
@@ -595,13 +1190,11 @@ pub struct KdfParameters {
     /// Placeholder representing the length of all fields that follow.
     ///
     /// For the actual value, see [`Self::LENGTH`].
-    #[serde(serialize_with = "KdfParameters::serialize_length")]
     pub length: Span<PhantomData<u8>>,
 
     /// Placeholder for a reserved field.
     ///
     /// For the actual value, see [`Self::RESERVED`].
-    #[serde(serialize_with = "KdfParameters::serialize_reserved")]
     pub reserved: Span<PhantomData<u8>>,
 
     pub hash_id: Span<HashAlgorithmId>,
@@ -611,45 +1204,10 @@ pub struct KdfParameters {
 impl KdfParameters {
     pub const LENGTH: u8 = 3;
     pub const RESERVED: u8 = 1;
-
-    fn serialize_length<S>(
-        length: &Span<PhantomData<u8>>,
-        serializer: S,
-    ) -> StdResult<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let Span {
-            offset,
-            length: span_length,
-            ..
-        } = *length;
-        Span {
-            offset,
-            length: span_length,
-            inner: Self::LENGTH,
-        }
-        .serialize(serializer)
-    }
-
-    fn serialize_reserved<S>(
-        reserved: &Span<PhantomData<u8>>,
-        serializer: S,
-    ) -> StdResult<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let Span { offset, length, .. } = *reserved;
-        Span {
-            offset,
-            length,
-            inner: Self::RESERVED,
-        }
-        .serialize(serializer)
-    }
 }
 
-#[derive(Copy, Clone, Debug, Display, PartialEq, Eq, Serialize)]
+#[derive(Copy, Clone, Debug, Display, PartialEq, Eq, Serialize, TryFrom)]
+#[try_from(repr)]
 #[repr(u8)]
 #[non_exhaustive]
 pub enum SymmetricKeyAlgorithmId {
@@ -683,7 +1241,24 @@ pub enum SymmetricKeyAlgorithmId {
     Camellia256 = 13,
 }
 
-#[derive(Copy, Clone, Debug, Display, PartialEq, Eq, Serialize)]
+#[derive(Copy, Clone, Debug, Display, PartialEq, Eq, Serialize, TryFrom)]
+#[try_from(repr)]
+#[repr(u8)]
+#[non_exhaustive]
+pub enum CompressionAlgorithmId {
+    Uncompressed = 0,
+
+    #[display("ZIP")]
+    Zip = 1,
+
+    #[display("ZLIB")]
+    Zlib = 2,
+
+    BZip2 = 3,
+}
+
+#[derive(Copy, Clone, Debug, Display, PartialEq, Eq, Serialize, TryFrom)]
+#[try_from(repr)]
 #[repr(u8)]
 #[non_exhaustive]
 pub enum HashAlgorithmId {
@@ -705,6 +1280,19 @@ pub enum HashAlgorithmId {
     Sha3_256 = 12,
     #[display("SHA3-512")]
     Sha3_512 = 14,
+}
+
+#[derive(Copy, Clone, Debug, Display, PartialEq, Eq, Serialize, TryFrom)]
+#[try_from(repr)]
+#[repr(u8)]
+#[non_exhaustive]
+pub enum AeadAlgorithmId {
+    #[display("EAX")]
+    Eax = 1,
+    #[display("OCB")]
+    Ocb = 2,
+    #[display("GCM")]
+    Gcm = 3,
 }
 
 #[derive(Clone, Debug, Display, PartialEq, Eq, Serialize)]
@@ -930,7 +1518,7 @@ mod tests {
         } => "Ed25519"
 
         unimplemented_public_key_algorithm {
-            UnimplementedPublicKeyAlgorithm
+            PublicKeyAlgorithmUnimplemented
         } => "Unimplemented"
 
         curve_oid {
