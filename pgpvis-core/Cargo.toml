@@ -7,17 +7,17 @@ publish = false
 crate-type = ["cdylib"]
 
 [dependencies]
-chrono = { version = "0.4.41", default-features = false, features = ["std"] }
-derive_more = { version = "2.0.1", features = ["display"] }
+chrono = { version = "0.4.42", default-features = false, features = ["std"] }
+derive_more = { version = "2.1.0", features = ["display"] }
 paste = "1.0.15"
-sequoia-openpgp = { version = "2.0.0", default-features = false, features = ["crypto-rust", "allow-experimental-crypto", "allow-variable-time-crypto"] }
-serde = { version = "1.0.219", features = ["derive"] }
+sequoia-openpgp = { version = "2.1.0", default-features = false, features = ["crypto-rust", "allow-experimental-crypto", "allow-variable-time-crypto"] }
+serde = { version = "1.0.228", features = ["derive"] }
 serde_repr = "0.1.20"
-thiserror = "2.0.12"
-wasm-bindgen = "0.2.100"
+thiserror = "2.0.17"
+wasm-bindgen = "0.2.106"
 
 [dev-dependencies]
-insta = { version = "1.43.1", features = ["yaml"] }
+insta = { version = "1.45.0", features = ["yaml"] }
 
 [package.metadata.wasm-pack.profile.release]
 wasm-opt = ["-O"]

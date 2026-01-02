@@ -4,4 +4,4 @@ edition = "2021"
 publish = false
 
 [build-dependencies]
-wasm-bindgen-cli = { version = "0.2.100", artifact = ["bin:wasm-bindgen"] }
+wasm-bindgen-cli = { version = "0.2.106", artifact = ["bin:wasm-bindgen"] }
