@@ -6,7 +6,7 @@ runs:
   steps:
     - name: Setup Rust toolchain cache
       id: cache-rust-toolchain
-      uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684  # v4.2.3
+      uses: actions/cache@9255dc7a253b0ccc959486e2bca901246202afeb  # v5.0.1
       with:
         path: ~/.rustup/toolchains/
         key: rust-toolchain-${{ hashFiles('./rust-toolchain.toml') }}
@@ -23,7 +23,7 @@ runs:
     - name: Setup pnpm
       uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda  # v4.1.0
     - name: Setup Node
-      uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4.4.0
+      uses: actions/setup-node@395ad3262231945c25e8478fd5baf05154b1d79f  # v6.1.0
       with:
         node-version-file: .nvmrc
         cache: pnpm
@@ -34,7 +34,7 @@ runs:
 
     - name: Setup editorconfig-checker cache
       id: cache-editorconfig-checker
-      uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684  # v4.2.3
+      uses: actions/cache@9255dc7a253b0ccc959486e2bca901246202afeb  # v5.0.1
       with:
         path: /usr/local/bin/editorconfig-checker
         key: editorconfig-checker-fd130e0731d9f9dd3a31dfff594996bffc2d448677e74b6d2dfb10f8992d6c92
