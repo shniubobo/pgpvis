@@ -6,7 +6,7 @@
     "dist": "pnpm -F pgpvis-ui dist",
     "clean": "rm -f ./dist/*.tar.gz && pnpm -F pgpvis-ui clean"
   },
-  "packageManager": "pnpm@10.11.0+sha512.6540583f41cc5f628eb3d9773ecee802f4f9ef9923cc45b69890fb47991d4b092964694ec3a4f738a420c918a333062c8b925d312f42e4f0c263eb603551f977",
+  "packageManager": "pnpm@12.17.0+sha512.b8d223ebec04b580a89ed206daa71d1bccb6a1ee1d52efa95cc3b0db75271561df8f0d8e2c43add39c5ec08018af7a8a95108e7090f95a29f88727b7a40fd53d",
   "pnpm": {
     "onlyBuiltDependencies": [
       "@swc/core",
